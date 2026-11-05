@@ -1,0 +1,13 @@
+# Perfil de desenvolvimento (ativo por padrão). Os valores padrão batem com o docker-compose.yml.
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5434/cadastro}
+    username: ${DB_USER:postgres}
+    password: ${DB_PASSWORD:postgres}
+  jpa:
+    hibernate:
+      ddl-auto: update   # temporário: será substituído por Flyway (issue #16)
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
