@@ -31,6 +31,7 @@ No Windows (PowerShell), use `Copy-Item .env.example .env` e `.\mvnw.cmd spring-
 | `DB_PORT` | `5434` | porta no host (evita conflito com PostgreSQL local na 5432) |
 | `DB_HOST` | `localhost` | host do banco |
 
+- No `.env`, escreva os valores **sem aspas**, sem `export` e sem comentário na mesma linha (o Compose e o Spring leem o arquivo de formas diferentes). Detalhes no próprio `.env.example`.
 - O banco só é publicado em `127.0.0.1`, não fica acessível pela rede.
 - O perfil **`dev`** (`ddl-auto: update`, log do SQL) só é ativado pelo `spring-boot:run`. Em uma IDE, defina `SPRING_PROFILES_ACTIVE=dev`. O jar empacotado e os testes **não** usam o perfil `dev`.
 
