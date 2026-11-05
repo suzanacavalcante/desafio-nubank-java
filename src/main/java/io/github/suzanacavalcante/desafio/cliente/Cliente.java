@@ -25,6 +25,8 @@ import java.util.Objects;
  * {@link #removerContato(Contato)}, que mantêm os dois lados do relacionamento sincronizados.
  * <p>
  * Um contato pertence a um único cliente durante toda a sua vida: não há "mover" contato entre clientes.
+ * Remover um contato o <b>apaga</b> (via {@code orphanRemoval}); não o reutilize em outro cliente, pois
+ * reanexar no mesmo flush um objeto removido por cascata faz o Hibernate falhar.
  */
 @Entity
 @Table(name = "clientes")
@@ -70,7 +72,7 @@ public class Cliente {
     }
 
     /**
-     * Remove o contato deste cliente (o {@code orphanRemoval} o apaga no flush).
+     * Remove o contato deste cliente (o {@code orphanRemoval} o apaga no flush; não o reutilize).
      * <p>
      * Atenção: a busca usa {@code equals}, que aqui é a identidade do objeto (as entidades não
      * sobrescrevem {@code equals}/{@code hashCode}, pois o id é {@code null} antes do persist).

@@ -68,21 +68,6 @@ class ClienteTest {
     }
 
     @Test
-    void contatoRemovidoPodeSerAdicionadoAOutroCliente() {
-        Cliente a = new Cliente();
-        Cliente b = new Cliente();
-        Contato contato = contato("48123", "a@x.com");
-        a.adicionarContato(contato);
-        a.removerContato(contato);
-
-        b.adicionarContato(contato);
-
-        assertSame(b, contato.getCliente());
-        assertTrue(a.getContatos().isEmpty());
-        assertEquals(1, b.getContatos().size());
-    }
-
-    @Test
     void removerContatoDesfazOsDoisLados() {
         Cliente cliente = new Cliente();
         Contato contato = contato("48123", "a@x.com");
