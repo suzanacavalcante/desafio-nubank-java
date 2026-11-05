@@ -1,11 +1,12 @@
 spring:
   application:
     name: desafio-nubank-java
-  profiles:
-    default: dev
+  config:
+    # Lê o .env da raiz do projeto (se existir). Variáveis de ambiente reais têm precedência.
+    import: optional:file:.env[.properties]
   datasource:
-    # Sem valores padrão aqui: fora do perfil "dev" a conexão deve vir do ambiente
-    url: ${DB_URL}
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5434}/${DB_NAME:cadastro}
+    # Sem valores padrão: credenciais vêm do .env ou do ambiente
     username: ${DB_USER}
     password: ${DB_PASSWORD}
   jpa:
