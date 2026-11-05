@@ -35,6 +35,54 @@ class ClienteTest {
     }
 
     @Test
+    void adicionarOMesmoContatoDuasVezesNaoDuplica() {
+        Cliente cliente = new Cliente();
+        Contato contato = contato("48123", "a@x.com");
+
+        cliente.adicionarContato(contato);
+        cliente.adicionarContato(contato);
+
+        assertEquals(1, cliente.getContatos().size());
+        assertSame(cliente, contato.getCliente());
+    }
+
+    @Test
+    void adicionarContatoDeOutroClienteLancaExcecaoENaoAlteraNada() {
+        Cliente a = new Cliente();
+        Cliente b = new Cliente();
+        Contato contato = contato("48123", "a@x.com");
+        a.adicionarContato(contato);
+
+        assertThrows(IllegalStateException.class, () -> b.adicionarContato(contato));
+
+        assertSame(a, contato.getCliente());
+        assertEquals(1, a.getContatos().size());
+        assertTrue(b.getContatos().isEmpty());
+    }
+
+    @Test
+    void adicionarContatoNuloLancaExcecaoSemAlterarALista() {
+        Cliente cliente = new Cliente();
+        assertThrows(NullPointerException.class, () -> cliente.adicionarContato(null));
+        assertTrue(cliente.getContatos().isEmpty());
+    }
+
+    @Test
+    void contatoRemovidoPodeSerAdicionadoAOutroCliente() {
+        Cliente a = new Cliente();
+        Cliente b = new Cliente();
+        Contato contato = contato("48123", "a@x.com");
+        a.adicionarContato(contato);
+        a.removerContato(contato);
+
+        b.adicionarContato(contato);
+
+        assertSame(b, contato.getCliente());
+        assertTrue(a.getContatos().isEmpty());
+        assertEquals(1, b.getContatos().size());
+    }
+
+    @Test
     void removerContatoDesfazOsDoisLados() {
         Cliente cliente = new Cliente();
         Contato contato = contato("48123", "a@x.com");

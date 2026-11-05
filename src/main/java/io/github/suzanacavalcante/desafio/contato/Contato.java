@@ -17,7 +17,6 @@ import lombok.Setter;
 @Entity
 @Table(name = "contatos")
 @Getter
-@Setter
 @NoArgsConstructor
 public class Contato {
 
@@ -28,15 +27,21 @@ public class Contato {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Setter
     @Column(nullable = false, length = TELEFONE_MAX)
     private String telefone;
 
+    @Setter
     @Column(nullable = false, length = EMAIL_MAX)
     private String email;
 
+    /**
+     * O setter é público porque {@code Cliente} fica em outro pacote (Contato tem repository, service e
+     * controller próprios). Não chame diretamente: use {@code Cliente.adicionarContato(...)}, que mantém
+     * os dois lados do relacionamento sincronizados.
+     */
+    @Setter
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "cliente_id", nullable = false)
     private Cliente cliente;
-    // O setter é público porque Cliente fica em outro pacote; use Cliente.adicionarContato(...)
-    // em vez de chamá-lo diretamente, para manter os dois lados sincronizados.
 }
