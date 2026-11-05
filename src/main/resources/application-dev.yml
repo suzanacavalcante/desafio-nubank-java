@@ -1,0 +1,13 @@
+# Perfil de desenvolvimento. NÃO é ativado por padrão: ./mvnw spring-boot:run o ativa
+# (propriedade spring-boot.run.profiles no pom.xml); na IDE, use SPRING_PROFILES_ACTIVE=dev.
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: update   # temporário: será substituído por Flyway (issue #16)
+    properties:
+      hibernate:
+        format_sql: true
+
+logging:
+  level:
+    org.hibernate.SQL: debug
