@@ -37,8 +37,16 @@ public class Contato {
 
     /**
      * O setter é público porque {@code Cliente} fica em outro pacote (Contato tem repository, service e
-     * controller próprios). Não chame diretamente: use {@code Cliente.adicionarContato(...)}, que mantém
-     * os dois lados do relacionamento sincronizados.
+     * controller próprios).
+     * <p>
+     * Há dois usos corretos (veja o Javadoc de {@code Cliente}):
+     * <ul>
+     *   <li>com o agregado em memória, use {@code Cliente.adicionarContato(...)}, que mantém os dois lados
+     *       sincronizados;</li>
+     *   <li>para acrescentar um contato a um cliente <b>já persistido</b>, chame {@code setCliente} e salve
+     *       pelo {@code ContatoRepository}: assim a coleção LAZY {@code Cliente.contatos} não é
+     *       inicializada ({@code ContatoService.criar}).</li>
+     * </ul>
      */
     @Setter
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

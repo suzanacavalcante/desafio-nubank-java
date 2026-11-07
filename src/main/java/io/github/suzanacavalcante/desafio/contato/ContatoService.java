@@ -2,7 +2,7 @@ package io.github.suzanacavalcante.desafio.contato;
 
 import io.github.suzanacavalcante.desafio.cliente.Cliente;
 import io.github.suzanacavalcante.desafio.cliente.ClienteRepository;
-import io.github.suzanacavalcante.desafio.config.ClienteNaoEncontradoException;
+import io.github.suzanacavalcante.desafio.cliente.ClienteNaoEncontradoException;
 import io.github.suzanacavalcante.desafio.contato.dto.ContatoResponse;
 import io.github.suzanacavalcante.desafio.contato.dto.NovoContatoRequest;
 import lombok.RequiredArgsConstructor;

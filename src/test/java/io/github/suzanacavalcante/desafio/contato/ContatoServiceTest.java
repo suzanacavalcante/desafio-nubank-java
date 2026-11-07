@@ -2,7 +2,7 @@ package io.github.suzanacavalcante.desafio.contato;
 
 import io.github.suzanacavalcante.desafio.cliente.Cliente;
 import io.github.suzanacavalcante.desafio.cliente.ClienteRepository;
-import io.github.suzanacavalcante.desafio.config.ClienteNaoEncontradoException;
+import io.github.suzanacavalcante.desafio.cliente.ClienteNaoEncontradoException;
 import io.github.suzanacavalcante.desafio.contato.dto.ContatoResponse;
 import io.github.suzanacavalcante.desafio.contato.dto.NovoContatoRequest;
 import org.junit.jupiter.api.BeforeEach;
@@ -65,14 +65,16 @@ class ContatoServiceTest {
     }
 
     @Test
-    void naoCarregaOsContatosDoClienteParaAcrescentarUm() {
+    void naoUsaAdicionarContatoParaNaoInicializarAColecao() {
         Cliente cliente = clienteComId(7L);
         when(clienteRepository.findById(7L)).thenReturn(Optional.of(cliente));
         when(contatoRepository.save(any(Contato.class))).thenAnswer(inv -> inv.getArgument(0));
 
         service.criar(new NovoContatoRequest(7L, "48123", "a@x.com"));
 
-        // a coleção do agregado não é tocada: ela é LAZY e só seria carregada por adicionarContato
+        // Guarda contra a regressão para Cliente.adicionarContato (que inicializaria a coleção LAZY):
+        // o contato não entra na lista em memória do cliente. Este Cliente não é um proxy Hibernate,
+        // então isto NÃO prova a ausência de carregamento; essa prova é a contagem de statements da #14.
         assertEquals(0, cliente.getContatos().size());
     }
 
