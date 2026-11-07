@@ -188,7 +188,7 @@ class ClienteRepositoryTest {
     }
 
     @Test
-    void bancoRejeitaTelefoneEEmailAcimaDoLimite() {
+    void bancoRejeitaTelefoneAcimaDoLimite() {
         Cliente telefoneLongo = cliente("T");
         telefoneLongo.adicionarContato(contato("1".repeat(Contato.TELEFONE_MAX + 1), "a@x.com"));
         assertThrows(DataIntegrityViolationException.class, () -> clienteRepository.saveAndFlush(telefoneLongo));

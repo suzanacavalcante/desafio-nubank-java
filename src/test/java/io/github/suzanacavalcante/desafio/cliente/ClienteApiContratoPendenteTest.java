@@ -1,7 +1,6 @@
 package io.github.suzanacavalcante.desafio.cliente;
 
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -39,18 +38,16 @@ class ClienteApiContratoPendenteTest {
     @Autowired
     JdbcTemplate jdbc;
 
-    private long ultimoIdAntes;
-
-    @BeforeEach
-    void guardarUltimoId() {
-        ultimoIdAntes = jdbc.queryForObject("select coalesce(max(id), 0) from clientes", Long.class);
-    }
-
-    /** Enquanto o bug existir, o dado inválido é gravado (ex.: nome vazio); apaga tudo que o teste criou. */
+    /**
+     * Enquanto o bug existir, o dado inválido é gravado. Apaga só o que os testes podem ter criado:
+     * os nomes com a marca e os dois valores exatos sem marca possível (vazio e só espaços).
+     * Não usa faixa de id, para não apagar dados de outro escritor no mesmo banco.
+     */
     @AfterEach
     void limpar() {
-        jdbc.update("delete from contatos where cliente_id > ?", ultimoIdAntes);
-        jdbc.update("delete from clientes where id > ?", ultimoIdAntes);
+        String filtro = "select id from clientes where nome like ? or nome in ('', '   ')";
+        jdbc.update("delete from contatos where cliente_id in (" + filtro + ")", MARCA + "%");
+        jdbc.update("delete from clientes where nome like ? or nome in ('', '   ')", MARCA + "%");
     }
 
     private void esperar400(String json) throws Exception {

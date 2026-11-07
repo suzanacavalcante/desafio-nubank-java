@@ -14,6 +14,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -120,12 +121,26 @@ class ClienteApiTest {
     @Test
     void atomicidadeContatoInvalidoNaListaNaoDeixaClienteNemContatosPersistidos() throws Exception {
         // 1º contato válido, 2º sem e-mail: o banco rejeita o 2º, e o 1º e o cliente devem sofrer rollback.
-        // O status HTTP não é verificado aqui (hoje é 500, o correto será 400: ver ClienteApiContratoPendenteTest).
+        // Hoje (sem handler) a exceção sobe pelo MockMvc; depois da #11 vira uma resposta 4xx. O teste vale nos dois casos,
+        // mas exige que a requisição tenha FALHADO, para provar que o rollback foi exercitado.
+        Integer status = null;
+        Throwable falha = null;
         try {
-            postar("{\"nome\":\"" + marca + "\",\"contatos\":["
-                    + "{\"telefone\":\"1\",\"email\":\"ok@x.com\"},{\"telefone\":\"2\"}]}");
-        } catch (Exception esperado) {
-            // sem handler de erros, a exceção pode subir pelo MockMvc; o que importa é o estado do banco
+            status = postar("{\"nome\":\"" + marca + "\",\"contatos\":["
+                    + "{\"telefone\":\"1\",\"email\":\"ok@x.com\"},{\"telefone\":\"2\"}]}")
+                    .andReturn().getResponse().getStatus();
+        } catch (Exception e) {
+            falha = e;
+        }
+
+        if (falha != null) {
+            boolean violacaoDoBanco = false;
+            for (Throwable t = falha; t != null; t = t.getCause()) {
+                violacaoDoBanco |= t instanceof org.springframework.dao.DataIntegrityViolationException;
+            }
+            assertTrue(violacaoDoBanco, "a falha deve vir do banco, não de outro erro: " + falha);
+        } else {
+            assertTrue(status >= 400, "o contato inválido não pode resultar em sucesso, status " + status);
         }
 
         assertEquals(0, contarClientes(), "cliente não pode ficar gravado");
