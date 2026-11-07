@@ -39,8 +39,13 @@ class ClienteApiTest {
 
     private final String marca = "qa-" + UUID.randomUUID();
 
+    private String indiceTemporario;
+
     @AfterEach
     void limpar() {
+        if (indiceTemporario != null) {
+            jdbc.execute("drop index if exists " + indiceTemporario);
+        }
         jdbc.update("delete from contatos where cliente_id in (select id from clientes where nome like ?)", marca + "%");
         jdbc.update("delete from clientes where nome like ?", marca + "%");
     }
@@ -120,14 +125,20 @@ class ClienteApiTest {
 
     @Test
     void atomicidadeContatoInvalidoNaListaNaoDeixaClienteNemContatosPersistidos() throws Exception {
-        // 1º contato válido, 2º sem e-mail: o banco rejeita o 2º, e o 1º e o cliente devem sofrer rollback.
-        // Hoje (sem handler) a exceção sobe pelo MockMvc; depois da #11 vira uma resposta 4xx. O teste vale nos dois casos,
-        // mas exige que a requisição tenha FALHADO, para provar que o rollback foi exercitado.
+        // A entrada é VÁLIDA para o Bean Validation (#10), então a falha só ocorre no banco, depois do 1º contato
+        // já ter sido enviado: um índice único parcial, criado só neste teste e só para este e-mail, faz o 2º contato
+        // (mesmo e-mail) violar a restrição. Assim o teste continua provando rollback depois da #10.
+        // Hoje (sem handler) a exceção sobe pelo MockMvc; depois da #11 vira uma resposta 4xx. O teste exige que a
+        // requisição tenha FALHADO, para provar que o rollback foi exercitado.
+        String email = marca + "@x.com";
+        indiceTemporario = "idx_qa_" + UUID.randomUUID().toString().replace("-", "");
+        jdbc.execute("create unique index " + indiceTemporario + " on contatos (email) where email = '" + email + "'");
         Integer status = null;
         Throwable falha = null;
         try {
             status = postar("{\"nome\":\"" + marca + "\",\"contatos\":["
-                    + "{\"telefone\":\"1\",\"email\":\"ok@x.com\"},{\"telefone\":\"2\"}]}")
+                    + "{\"telefone\":\"1\",\"email\":\"" + email + "\"},"
+                    + "{\"telefone\":\"2\",\"email\":\"" + email + "\"}]}")
                     .andReturn().getResponse().getStatus();
         } catch (Exception e) {
             falha = e;
