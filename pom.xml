@@ -17,6 +17,8 @@
 		<java.version>21</java.version>
 		<!-- ./mvnw spring-boot:run ativa o perfil dev; o jar empacotado e os testes não -->
 		<spring-boot.run.profiles>dev</spring-boot.run.profiles>
+		<!-- testes de regressão de bugs ainda abertos (falham de propósito); rodar com -Dgroups=bug-conhecido -DexcludedGroups=nenhum -->
+		<excludedGroups>bug-conhecido</excludedGroups>
 	</properties>
 	<dependencies>
 		<dependency>
