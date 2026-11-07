@@ -21,8 +21,20 @@ import java.util.Objects;
 
 /**
  * Raiz do agregado: um cliente possui zero ou mais contatos, que só existem enquanto o cliente existe.
- * Os contatos são alterados somente por {@link #adicionarContato(Contato)} e
+ * A coleção {@code contatos} é {@code LAZY} e só muda por {@link #adicionarContato(Contato)} e
  * {@link #removerContato(Contato)}, que mantêm os dois lados do relacionamento sincronizados.
+ * <p>
+ * Há <b>dois caminhos sancionados</b> para associar um contato a um cliente:
+ * <ul>
+ *   <li>{@code adicionarContato}: quando se trabalha com o agregado em memória, por exemplo ao criar o
+ *       cliente já com seus contatos ({@code ClienteMapper.toEntity}). Ele consulta a coleção
+ *       ({@code contatos.contains}), o que <b>inicializa a coleção LAZY inteira</b> de um cliente já
+ *       persistido.</li>
+ *   <li>{@code contato.setCliente(cliente)} + {@code ContatoRepository.save}: quando se acrescenta um
+ *       contato a um cliente que já existe, <b>sem carregar a coleção</b> ({@code ContatoService.criar}).
+ *       Não "corrija" esse caminho para {@code adicionarContato}: isso traria de volta o carregamento
+ *       de todos os contatos só para acrescentar um.</li>
+ * </ul>
  * <p>
  * Um contato pertence a um único cliente durante toda a sua vida: não há "mover" contato entre clientes.
  * Remover um contato o <b>apaga</b> (via {@code orphanRemoval}); não o reutilize em outro cliente, pois
