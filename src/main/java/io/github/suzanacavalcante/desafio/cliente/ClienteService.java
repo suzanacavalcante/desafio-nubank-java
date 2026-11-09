@@ -2,6 +2,9 @@ package io.github.suzanacavalcante.desafio.cliente;
 
 import io.github.suzanacavalcante.desafio.cliente.dto.ClienteRequest;
 import io.github.suzanacavalcante.desafio.cliente.dto.ClienteResponse;
+import io.github.suzanacavalcante.desafio.contato.ContatoMapper;
+import io.github.suzanacavalcante.desafio.contato.ContatoRepository;
+import io.github.suzanacavalcante.desafio.contato.dto.ContatoResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,6 +16,7 @@ import java.util.List;
 public class ClienteService {
 
     private final ClienteRepository clienteRepository;
+    private final ContatoRepository contatoRepository;
 
     /**
      * Cria o cliente e, se vierem, seus contatos, tudo na mesma transação: se qualquer contato
@@ -50,6 +54,29 @@ public class ClienteService {
     public List<ClienteResponse> listar() {
         return clienteRepository.findAllComContatos().stream()
                 .map(ClienteMapper::toResponse)
+                .toList();
+    }
+
+    /**
+     * Lista os contatos de um cliente, ordenados por id.
+     * <p>
+     * Checa a existência com {@link ClienteRepository#existsById} antes de buscar:
+     * {@link ContatoRepository#findByClienteIdOrderById} devolve lista vazia tanto para cliente sem
+     * contatos quanto para cliente inexistente, e a API precisa distinguir os dois casos (200 com
+     * {@code []} versus 404).
+     * <p>
+     * O mapeamento para {@link ContatoResponse} acontece dentro da transação; o cliente de cada contato
+     * é só uma referência (o mapper lê apenas o id), então não há consultas extras por contato.
+     *
+     * @throws ClienteNaoEncontradoException se não existir cliente com o {@code id} informado
+     */
+    @Transactional(readOnly = true)
+    public List<ContatoResponse> contatosDoCliente(Long id) {
+        if (!clienteRepository.existsById(id)) {
+            throw new ClienteNaoEncontradoException(id);
+        }
+        return contatoRepository.findByClienteIdOrderById(id).stream()
+                .map(ContatoMapper::toResponse)
                 .toList();
     }
 }

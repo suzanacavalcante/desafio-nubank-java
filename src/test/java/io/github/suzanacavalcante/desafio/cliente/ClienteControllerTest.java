@@ -115,4 +115,35 @@ class ClienteControllerTest {
 
         verifyNoInteractions(service);
     }
+
+    @Test
+    void contatosDoClienteRetorna200ComALista() throws Exception {
+        when(service.contatosDoCliente(1L)).thenReturn(List.of(
+                new ContatoResponse(10L, "48123", "a@x.com", 1L),
+                new ContatoResponse(11L, "48987", "b@x.com", 1L)));
+
+        mockMvc.perform(get("/clientes/1/contatos"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].id").value(10))
+                .andExpect(jsonPath("$[0].clienteId").value(1))
+                .andExpect(jsonPath("$[1].telefone").value("48987"));
+    }
+
+    @Test
+    void contatosDoClienteSemContatosRetorna200ComArrayVazio() throws Exception {
+        when(service.contatosDoCliente(1L)).thenReturn(List.of());
+
+        mockMvc.perform(get("/clientes/1/contatos"))
+                .andExpect(status().isOk())
+                .andExpect(content().json("[]"));
+    }
+
+    @Test
+    void idNaoNumericoRetorna400SemChamarOService() throws Exception {
+        mockMvc.perform(get("/clientes/abc/contatos"))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(service);
+    }
 }

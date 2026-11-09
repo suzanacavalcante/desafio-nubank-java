@@ -3,6 +3,7 @@ package io.github.suzanacavalcante.desafio.cliente;
 import io.github.suzanacavalcante.desafio.cliente.dto.ClienteRequest;
 import io.github.suzanacavalcante.desafio.cliente.dto.ClienteResponse;
 import io.github.suzanacavalcante.desafio.contato.Contato;
+import io.github.suzanacavalcante.desafio.contato.ContatoRepository;
 import io.github.suzanacavalcante.desafio.contato.dto.ContatoRequest;
 import io.github.suzanacavalcante.desafio.contato.dto.ContatoResponse;
 import org.junit.jupiter.api.BeforeEach;
@@ -21,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
@@ -31,11 +33,14 @@ class ClienteServiceTest {
     @Mock
     ClienteRepository clienteRepository;
 
+    @Mock
+    ContatoRepository contatoRepository;
+
     ClienteService service;
 
     @BeforeEach
     void setUp() {
-        service = new ClienteService(clienteRepository);
+        service = new ClienteService(clienteRepository, contatoRepository);
     }
 
     /** Simula o banco: atribui ids ao cliente e aos contatos ao salvar. */
@@ -152,5 +157,47 @@ class ClienteServiceTest {
 
         assertThrows(DataIntegrityViolationException.class,
                 () -> service.criar(new ClienteRequest("Ana", null)));
+    }
+
+    private static Contato contatoDe(Cliente cliente, long id) {
+        Contato contato = new Contato();
+        ReflectionTestUtils.setField(contato, "id", id);
+        contato.setTelefone("tel" + id);
+        contato.setEmail(id + "@x.com");
+        contato.setCliente(cliente);
+        return contato;
+    }
+
+    @Test
+    void contatosDoClienteConverteNaOrdemDoRepositorioComClienteId() {
+        Cliente ana = clienteComContatos(7L, "Ana");
+        when(clienteRepository.existsById(7L)).thenReturn(true);
+        when(contatoRepository.findByClienteIdOrderById(7L))
+                .thenReturn(List.of(contatoDe(ana, 10L), contatoDe(ana, 11L)));
+
+        List<ContatoResponse> resposta = service.contatosDoCliente(7L);
+
+        assertEquals(List.of(10L, 11L), resposta.stream().map(ContatoResponse::id).toList());
+        assertEquals(List.of("tel10", "tel11"), resposta.stream().map(ContatoResponse::telefone).toList());
+        resposta.forEach(c -> assertEquals(7L, c.clienteId()));
+    }
+
+    @Test
+    void contatosDoClienteSemContatosDevolveListaVazia() {
+        when(clienteRepository.existsById(7L)).thenReturn(true);
+        when(contatoRepository.findByClienteIdOrderById(7L)).thenReturn(List.of());
+
+        assertTrue(service.contatosDoCliente(7L).isEmpty());
+    }
+
+    @Test
+    void contatosDeClienteInexistenteLancaExcecaoSemConsultarContatos() {
+        when(clienteRepository.existsById(99L)).thenReturn(false);
+
+        ClienteNaoEncontradoException ex = assertThrows(ClienteNaoEncontradoException.class,
+                () -> service.contatosDoCliente(99L));
+
+        assertEquals(99L, ex.getClienteId());
+        verify(contatoRepository, never()).findByClienteIdOrderById(any());
     }
 }
