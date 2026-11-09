@@ -35,6 +35,16 @@ public class ClienteService {
      * <p>
      * A conversão para {@link ClienteResponse} acontece <b>dentro</b> da transação; a coleção já vem
      * carregada, então o mapeamento não dispara consultas extras.
+     * <p>
+     * O que {@code @Transactional(readOnly = true)} dá aqui é só o modo somente leitura (sem dirty
+     * checking nem flush). Não é ela que protege contra {@code LazyInitializationException}: o
+     * {@code JOIN FETCH} já traz a coleção. Se a consulta for trocada por uma sem {@code JOIN FETCH},
+     * a transação passa a ser necessária de verdade.
+     * <p>
+     * Sem paginação: a resposta traz a base inteira e cresce linearmente (medido no QA do PR #28:
+     * ~8 MB para 20 mil clientes com 5 contatos cada). Paginar é pré-requisito para uso com volume real
+     * (backlog B1); o motivo de não paginar hoje está no Javadoc de
+     * {@link ClienteRepository#findAllComContatos()}.
      */
     @Transactional(readOnly = true)
     public List<ClienteResponse> listar() {
