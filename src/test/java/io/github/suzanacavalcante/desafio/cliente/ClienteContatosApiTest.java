@@ -74,6 +74,9 @@ class ClienteContatosApiTest {
     @Test
     void clienteComContatosRetorna200ComOsSeusContatosOrdenadosPorId() throws Exception {
         long id = novoCliente("-A", "111", "222", "333");
+        // Reescreve a linha do primeiro contato: o UPDATE grava uma nova versão no fim da tabela, então
+        // sem ORDER BY ele sairia por último e o teste detectaria a troca por findByClienteId.
+        jdbc.update("update contatos set email = email where cliente_id = ? and telefone = '111'", id);
 
         mockMvc.perform(get("/clientes/{id}/contatos", id))
                 .andExpect(status().isOk())
@@ -121,9 +124,8 @@ class ClienteContatosApiTest {
                 "esperava existsById + SELECT de contatos; consultas: " + Arrays.toString(estatisticas.getQueries()));
     }
 
-    private long idDeClienteInexistente() {
-        return jdbc.queryForObject("select coalesce(max(id), 0) + 100000 from clientes", Long.class);
-    }
+    /** Nenhuma sequência chega a este valor, então o cliente nunca existe. */
+    private static final long ID_INEXISTENTE = Long.MAX_VALUE;
 
     /**
      * Comportamento <b>atual</b>: sem o tratamento global de erros (issue #11) a exceção de domínio
@@ -134,7 +136,7 @@ class ClienteContatosApiTest {
     @Test
     void clienteInexistenteLancaExcecaoDeDominioEmVezDeListaVazia() {
         ServletException ex = assertThrows(ServletException.class,
-                () -> mockMvc.perform(get("/clientes/{id}/contatos", idDeClienteInexistente())));
+                () -> mockMvc.perform(get("/clientes/{id}/contatos", ID_INEXISTENTE)));
 
         assertInstanceOf(ClienteNaoEncontradoException.class, ex.getCause());
     }
@@ -148,7 +150,7 @@ class ClienteContatosApiTest {
     @Test
     @Tag("bug-conhecido")
     void clienteInexistenteRetorna404() throws Exception {
-        mockMvc.perform(get("/clientes/{id}/contatos", idDeClienteInexistente()))
+        mockMvc.perform(get("/clientes/{id}/contatos", ID_INEXISTENTE))
                 .andExpect(status().isNotFound());
     }
 }
