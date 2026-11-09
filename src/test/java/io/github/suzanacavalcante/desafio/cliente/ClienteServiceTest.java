@@ -118,7 +118,7 @@ class ClienteServiceTest {
 
         assertEquals(List.of("Ana", "Bia", "Caio"), resposta.stream().map(ClienteResponse::nome).toList());
         assertEquals(List.of(10L, 11L), resposta.get(0).contatos().stream().map(ContatoResponse::id).toList());
-        assertEquals(List.of(3L), List.of(resposta.get(2).id()));
+        assertEquals(3L, resposta.get(2).id());
         resposta.get(0).contatos().forEach(c -> assertEquals(1L, c.clienteId()));
     }
 
@@ -137,7 +137,7 @@ class ClienteServiceTest {
     }
 
     @Test
-    void listarUsaApenasAConsultaComJoinFetch() {
+    void listarUsaApenasFindAllComContatos() {
         when(clienteRepository.findAllComContatos()).thenReturn(List.of());
 
         service.listar();

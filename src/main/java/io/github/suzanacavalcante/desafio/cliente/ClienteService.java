@@ -41,9 +41,9 @@ public class ClienteService {
      * {@code JOIN FETCH} já traz a coleção. Se a consulta for trocada por uma sem {@code JOIN FETCH},
      * a transação passa a ser necessária de verdade.
      * <p>
-     * Sem paginação: a resposta traz a base inteira e cresce linearmente (medido no QA do PR #28:
+     * Sem paginação: a resposta traz a base inteira e cresce linearmente (medição de QA, nov/2026:
      * ~8 MB para 20 mil clientes com 5 contatos cada). Paginar é pré-requisito para uso com volume real
-     * (backlog B1); o motivo de não paginar hoje está no Javadoc de
+     * (issue de paginação do backlog); o motivo de não paginar hoje está no Javadoc de
      * {@link ClienteRepository#findAllComContatos()}.
      */
     @Transactional(readOnly = true)
