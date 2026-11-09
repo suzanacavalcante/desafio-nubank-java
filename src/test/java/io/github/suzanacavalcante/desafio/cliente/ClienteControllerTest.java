@@ -20,7 +20,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -79,6 +81,31 @@ class ClienteControllerTest {
         mockMvc.perform(post("/clientes").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"nome\":\"Ana\",\"contatos\":[]}"))
                 .andExpect(status().isCreated());
+    }
+
+    @Test
+    void listarRetorna200ComClientesEContatos() throws Exception {
+        when(service.listar()).thenReturn(List.of(
+                new ClienteResponse(1L, "Ana", List.of(new ContatoResponse(10L, "48123", "a@x.com", 1L))),
+                new ClienteResponse(2L, "Bia", List.of())));
+
+        mockMvc.perform(get("/clientes"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].nome").value("Ana"))
+                .andExpect(jsonPath("$[0].contatos[0].telefone").value("48123"))
+                .andExpect(jsonPath("$[0].contatos[0].clienteId").value(1))
+                .andExpect(jsonPath("$[1].contatos").isArray())
+                .andExpect(jsonPath("$[1].contatos").isEmpty());
+    }
+
+    @Test
+    void listarSemClientesRetorna200ComListaVazia() throws Exception {
+        when(service.listar()).thenReturn(List.of());
+
+        mockMvc.perform(get("/clientes"))
+                .andExpect(status().isOk())
+                .andExpect(content().json("[]"));
     }
 
     @Test

@@ -6,6 +6,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+
 @Service
 @RequiredArgsConstructor
 public class ClienteService {
@@ -24,5 +26,20 @@ public class ClienteService {
     public ClienteResponse criar(ClienteRequest request) {
         Cliente cliente = clienteRepository.save(ClienteMapper.toEntity(request));
         return ClienteMapper.toResponse(cliente);
+    }
+
+    /**
+     * Lista todos os clientes com seus contatos, em uma única consulta principal
+     * ({@link ClienteRepository#findAllComContatos()}, com {@code JOIN FETCH}). Clientes sem contatos
+     * vêm com lista vazia; clientes e contatos saem ordenados por id.
+     * <p>
+     * A conversão para {@link ClienteResponse} acontece <b>dentro</b> da transação; a coleção já vem
+     * carregada, então o mapeamento não dispara consultas extras.
+     */
+    @Transactional(readOnly = true)
+    public List<ClienteResponse> listar() {
+        return clienteRepository.findAllComContatos().stream()
+                .map(ClienteMapper::toResponse)
+                .toList();
     }
 }
