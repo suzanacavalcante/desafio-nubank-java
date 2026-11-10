@@ -1,7 +1,7 @@
 package io.github.suzanacavalcante.desafio.cliente;
 
+import io.github.suzanacavalcante.desafio.cliente.dto.ClienteRequest;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -11,26 +11,21 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Testes de regressão dos bugs de QA (relatório de 2026-11-07): o enunciado diz que
- * {@code POST /clientes} responde <b>400</b> para entrada inválida, mas a {@code main} (a01138e)
- * responde 500 ou aceita o dado. Falham de propósito até as issues #10 (Bean Validation) e
- * #11 (tratamento global de erros) serem implementadas.
- * <p>
- * Marcados com {@code bug-conhecido}, ficam fora do {@code ./mvnw verify} padrão para não quebrar o
- * CI. Para rodá-los: {@code ./mvnw test -Dgroups=bug-conhecido -DexcludedGroups=nenhum}.
- * Quando o bug for corrigido, o teste correspondente deve passar e a tag deve ser removida.
+ * Validação de entrada de {@code POST /clientes} de ponta a ponta (issue #10): entrada inválida responde
+ * <b>400</b> e <b>nada</b> chega ao banco. Nasceu como os testes de regressão de QA (relatório de
+ * 2026-11-07, com {@code @Tag("bug-conhecido")}); a tag saiu quando a validação foi implementada.
  */
-@Tag("bug-conhecido")
 @SpringBootTest
 @AutoConfigureMockMvc
 @TestPropertySource(properties = "spring.jpa.hibernate.ddl-auto=update")
-class ClienteApiContratoPendenteTest {
+class ClienteApiValidacaoTest {
 
-    private static final String MARCA = "qa-pendente-";
+    private static final String MARCA = "qa-validacao-";
 
     @Autowired
     MockMvc mockMvc;
@@ -39,8 +34,8 @@ class ClienteApiContratoPendenteTest {
     JdbcTemplate jdbc;
 
     /**
-     * Enquanto o bug existir, o dado inválido é gravado. Apaga só o que os testes podem ter criado:
-     * os nomes com a marca e os dois valores exatos sem marca possível (vazio e só espaços).
+     * Rede de segurança: se a validação falhar, o dado inválido seria gravado. Apaga só o que os testes
+     * podem ter criado (nomes com a marca e os dois valores exatos sem marca possível: vazio e só espaços).
      * Não usa faixa de id, para não apagar dados de outro escritor no mesmo banco.
      */
     @AfterEach
@@ -53,6 +48,9 @@ class ClienteApiContratoPendenteTest {
     private void esperar400(String json) throws Exception {
         mockMvc.perform(post("/clientes").contentType(MediaType.APPLICATION_JSON).content(json))
                 .andExpect(status().isBadRequest());
+        assertEquals(0, jdbc.queryForObject(
+                "select count(*) from clientes where nome like ? or nome in ('', '   ')", Integer.class, MARCA + "%"),
+                "entrada inválida não pode gravar cliente");
     }
 
     @Test
@@ -110,5 +108,24 @@ class ClienteApiContratoPendenteTest {
     @Test
     void deveRejeitarEmailSemFormatoValido() throws Exception {
         esperar400("{\"nome\":\"" + MARCA + "6\",\"contatos\":[{\"telefone\":\"1\",\"email\":\"nao-e-email\"}]}");
+    }
+
+    private String contatos(int quantidade) {
+        return java.util.stream.IntStream.rangeClosed(1, quantidade)
+                .mapToObj(i -> "{\"telefone\":\"" + i + "\",\"email\":\"c" + i + "@x.com\"}")
+                .collect(java.util.stream.Collectors.joining(",", "[", "]"));
+    }
+
+    @Test
+    void deveRejeitarMaisContatosQueOLimite() throws Exception {
+        esperar400("{\"nome\":\"" + MARCA + "7\",\"contatos\":" + contatos(ClienteRequest.CONTATOS_MAX + 1) + "}");
+    }
+
+    @Test
+    void aceitaListaDeContatosNoLimiteENomeNoLimite() throws Exception {
+        String nome = (MARCA + "8-").concat("a".repeat(Cliente.NOME_MAX - (MARCA + "8-").length()));
+        mockMvc.perform(post("/clientes").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"nome\":\"" + nome + "\",\"contatos\":" + contatos(ClienteRequest.CONTATOS_MAX) + "}"))
+                .andExpect(status().isCreated());
     }
 }

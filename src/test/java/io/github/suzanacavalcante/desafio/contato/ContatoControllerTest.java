@@ -3,6 +3,8 @@ package io.github.suzanacavalcante.desafio.contato;
 import io.github.suzanacavalcante.desafio.contato.dto.ContatoResponse;
 import io.github.suzanacavalcante.desafio.contato.dto.NovoContatoRequest;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -52,5 +54,53 @@ class ContatoControllerTest {
                 .andExpect(status().isBadRequest());
 
         verifyNoInteractions(service);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "{\"telefone\":\"1\",\"email\":\"a@x.com\"}",
+            "{\"clienteId\":null,\"telefone\":\"1\",\"email\":\"a@x.com\"}",
+            "{\"clienteId\":7,\"email\":\"a@x.com\"}",
+            "{\"clienteId\":7,\"telefone\":\"\",\"email\":\"a@x.com\"}",
+            "{\"clienteId\":7,\"telefone\":\"   \",\"email\":\"a@x.com\"}",
+            "{\"clienteId\":7,\"telefone\":\"1\"}",
+            "{\"clienteId\":7,\"telefone\":\"1\",\"email\":\"\"}",
+            "{\"clienteId\":7,\"telefone\":\"1\",\"email\":\"nao-e-email\"}",
+            "{\"clienteId\":7,\"telefone\":\"1\",\"email\":\"a@x\u0020.com\"}"})
+    void corpoInvalidoRetorna400ENaoChegaAoService(String json) throws Exception {
+        mockMvc.perform(post("/contatos").contentType(MediaType.APPLICATION_JSON).content(json))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(service);
+    }
+
+    /** E-mail de formato válido (parte local até 64 caracteres, rótulos até 63) com exatamente {@code tamanho}. */
+    private static String emailComTamanho(int tamanho) {
+        String prefixo = "a".repeat(60) + "@" + ("b".repeat(60) + ".").repeat(3);
+        return prefixo + "c".repeat(tamanho - prefixo.length());
+    }
+
+    @Test
+    void telefoneEEmailAcimaDoLimiteRetornam400() throws Exception {
+        String telefoneLongo = "{\"clienteId\":7,\"telefone\":\"" + "1".repeat(Contato.TELEFONE_MAX + 1)
+                + "\",\"email\":\"a@x.com\"}";
+        String emailLongo = "{\"clienteId\":7,\"telefone\":\"1\",\"email\":\"" + emailComTamanho(Contato.EMAIL_MAX + 1)
+                + "\"}";
+
+        for (String json : new String[] {telefoneLongo, emailLongo}) {
+            mockMvc.perform(post("/contatos").contentType(MediaType.APPLICATION_JSON).content(json))
+                    .andExpect(status().isBadRequest());
+        }
+        verifyNoInteractions(service);
+    }
+
+    @Test
+    void valoresNoLimiteExatoSaoAceitos() throws Exception {
+        when(service.criar(any())).thenReturn(new ContatoResponse(1L, "t", "e", 7L));
+        String json = "{\"clienteId\":7,\"telefone\":\"" + "1".repeat(Contato.TELEFONE_MAX)
+                + "\",\"email\":\"" + emailComTamanho(Contato.EMAIL_MAX) + "\"}";
+
+        mockMvc.perform(post("/contatos").contentType(MediaType.APPLICATION_JSON).content(json))
+                .andExpect(status().isCreated());
     }
 }
