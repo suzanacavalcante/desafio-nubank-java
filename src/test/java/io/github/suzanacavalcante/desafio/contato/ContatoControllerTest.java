@@ -103,4 +103,16 @@ class ContatoControllerTest {
         mockMvc.perform(post("/contatos").contentType(MediaType.APPLICATION_JSON).content(json))
                 .andExpect(status().isCreated());
     }
+
+    /** U+0000 chega ao PostgreSQL como erro 500; a validação precisa barrá-lo antes (BUG-4 do QA, PR #32). */
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "{\"clienteId\":7,\"telefone\":\"1\\u00002\",\"email\":\"a@x.com\"}",
+            "{\"clienteId\":7,\"telefone\":\"\\u0000\",\"email\":\"a@x.com\"}"})
+    void telefoneComCaractereNuloRetorna400(String json) throws Exception {
+        mockMvc.perform(post("/contatos").contentType(MediaType.APPLICATION_JSON).content(json))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(service);
+    }
 }

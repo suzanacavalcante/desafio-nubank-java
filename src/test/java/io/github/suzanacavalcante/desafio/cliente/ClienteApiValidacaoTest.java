@@ -128,4 +128,15 @@ class ClienteApiValidacaoTest {
                         .content("{\"nome\":\"" + nome + "\",\"contatos\":" + contatos(ClienteRequest.CONTATOS_MAX) + "}"))
                 .andExpect(status().isCreated());
     }
+
+    /** U+0000 (escrito no JSON como barra invertida + u0000): o PostgreSQL o recusa, e viraria 500. */
+    @Test
+    void deveRejeitarCaractereNuloNoNome() throws Exception {
+        esperar400("{\"nome\":\"" + MARCA + "9\\u0000b\"}");
+    }
+
+    @Test
+    void deveRejeitarCaractereNuloNoTelefoneDeContatoAninhado() throws Exception {
+        esperar400("{\"nome\":\"" + MARCA + "10\",\"contatos\":[{\"telefone\":\"1\\u00002\",\"email\":\"a@x.com\"}]}");
+    }
 }

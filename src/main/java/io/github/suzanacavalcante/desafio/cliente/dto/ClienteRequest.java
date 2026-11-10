@@ -2,6 +2,7 @@ package io.github.suzanacavalcante.desafio.cliente.dto;
 
 import io.github.suzanacavalcante.desafio.cliente.Cliente;
 import io.github.suzanacavalcante.desafio.contato.dto.ContatoRequest;
+import io.github.suzanacavalcante.desafio.config.SemCaractereNulo;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -20,7 +21,7 @@ import java.util.List;
  *                 conter elementos {@code null}, e cada contato é validado
  */
 public record ClienteRequest(
-        @NotBlank @Size(max = Cliente.NOME_MAX) String nome,
+        @NotBlank @SemCaractereNulo @Size(max = Cliente.NOME_MAX) String nome,
         @Size(max = CONTATOS_MAX) List<@NotNull @Valid ContatoRequest> contatos) {
 
     /** Máximo de contatos aceitos em um único {@code POST /clientes}. */
