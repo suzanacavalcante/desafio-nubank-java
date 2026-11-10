@@ -1,7 +1,7 @@
 # Documentação de arquitetura (modelo C4)
 
 API REST de **clientes e contatos** (1 cliente → N contatos), desafio técnico backend.
-Os diagramas usam [Mermaid](https://mermaid.js.org/) (sintaxe C4), então renderizam direto no GitHub e no VS Code.
+Os diagramas usam [Mermaid](https://mermaid.js.org/) (sintaxe C4), então renderizam direto no GitHub (no VS Code, com a extensão Markdown Preview Mermaid Support).
 
 > **Estado documentado:** branch `main` após o merge do PR #30 (endpoints #6–#9 prontos).
 > Itens planejados e **ainda não implementados** aparecem marcados como *(planejado)* e em tracejado:
@@ -55,7 +55,7 @@ C4Container
 | Contêiner | Tecnologia | Responsabilidade |
 |---|---|---|
 | Aplicação Spring Boot | Java 21, Spring Boot 4.1.2, Maven Wrapper, Lombok | API REST, transações, mapeamento DTO ↔ entidade, persistência com JPA. Empacotada como jar (`desafio-nubank-java-0.0.1-SNAPSHOT.jar`). |
-| Banco de dados | PostgreSQL 16, imagem oficial, volume `pgdata`, *healthcheck* `pg_isready` | Guarda os dados. Schema gerado pelo Hibernate (`ddl-auto: update`) só no perfil `dev`; nos testes e no jar é `none`. *(planejado: Flyway, #16)* |
+| Banco de dados | PostgreSQL 16, imagem oficial, volume `pgdata`, *healthcheck* `pg_isready` | Guarda os dados. Schema gerado pelo Hibernate (`ddl-auto: update`) só no perfil `dev`; no jar é `none`, e os testes de API (`*ApiTest`) usam `update` via `@TestPropertySource` (até o Flyway, #16). *(planejado: Flyway, #16)* |
 
 ### Configuração e ambientes
 
@@ -165,7 +165,7 @@ classDiagram
         +String email  «NOT NULL, 254»
         +Cliente cliente  «LAZY, NOT NULL»
     }
-    Cliente "1" o-- "0..*" Contato : contatos\n(cascade ALL, orphanRemoval)
+    Cliente "1" o-- "0..*" Contato : contatos (cascade ALL, orphanRemoval)
 ```
 
 ### Esquema físico
@@ -191,12 +191,12 @@ A FK gerada pelo Hibernate **não** tem `ON DELETE CASCADE` nem índice em `cont
 
 | Método | Rota | Corpo | Sucesso | Erros |
 |---|---|---|---|---|
-| POST | `/clientes` | `{ nome, contatos?: [{ telefone, email }] }` | 201 `ClienteResponse` | 400 *(planejado, #10)* |
-| POST | `/contatos` | `{ clienteId, telefone, email }` | 201 `ContatoResponse` | 400 *(planejado, #10)*, 404 *(mapeamento planejado, #11)* |
+| POST | `/clientes` | `{ nome, contatos?: [{ telefone, email }] }` | 201 `ClienteResponse` | 400 *(hoje 500; planejado, #10)* |
+| POST | `/contatos` | `{ clienteId, telefone, email }` | 201 `ContatoResponse` | 400 *(hoje 500; planejado, #10)*, 404 *(hoje 500; planejado, #11)* |
 | GET | `/clientes` | – | 200 lista de `ClienteResponse` com contatos | – |
-| GET | `/clientes/{id}/contatos` | – | 200 lista de `ContatoResponse` | 404 *(mapeamento planejado, #11)* |
+| GET | `/clientes/{id}/contatos` | – | 200 lista de `ContatoResponse` | 404 *(hoje 500; planejado, #11)* |
 
-> Hoje `ClienteNaoEncontradoException` é lançada, mas não há `@RestControllerAdvice`; enquanto a #11 não for feita, o status efetivo de cliente inexistente depende do tratamento padrão do Spring. Confirme nos testes antes de documentar como 404.
+> Hoje `ClienteNaoEncontradoException` é lançada, mas não há `@RestControllerAdvice`: cliente inexistente responde **500** (não 404) até a #11. Do mesmo modo, entrada inválida (nome nulo, e-mail nulo, `clienteId` nulo) hoje também responde 500 até a #10. Os testes `clienteInexistenteRetorna404` (tag `bug-conhecido`) fixam o contrato desejado.
 
 ### Fluxo: criar contato (`POST /contatos`)
 
@@ -266,7 +266,7 @@ sequenceDiagram
 ## Qualidade e testes
 
 - Pirâmide: testes unitários (entidades, mappers, services com Mockito), `@WebMvcTest` nos controllers, `@DataJpaTest` no repositório e testes de API que sobem o contexto completo (`*ApiTest`).
-- Testes de contrato ainda não atendido ficam sob a tag `bug-conhecido`, excluída por padrão (`excludedGroups` no `pom.xml`); rode com `-Dgroups=bug-conhecido -DexcludedGroups=nenhum`.
+- Testes de contrato ainda não atendidos ficam sob a tag `bug-conhecido` e **falham de propósito** até a issue correspondente ser feita (não tratar como regressão); a tag é excluída por padrão (`excludedGroups` no `pom.xml`); rode com `-Dgroups=bug-conhecido -DexcludedGroups=nenhum`.
 - Os testes que sobem o contexto precisam do PostgreSQL ativo (`docker compose up -d --wait`). *(planejado: Testcontainers, #14)*
 
 ## Evolução prevista

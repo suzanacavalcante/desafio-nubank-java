@@ -16,7 +16,7 @@ API REST de **clientes e contatos** (1 cliente → N contatos), feita com **Java
 ### Exemplos
 
 ```bash
-# Criar cliente com contatos
+# Criar cliente com contatos (os exemplos com id 1 pressupõem banco vazio: o id vem da sequência)
 curl -X POST http://localhost:8080/clientes -H "Content-Type: application/json" \
   -d '{"nome":"Maria","contatos":[{"telefone":"11999990000","email":"maria@exemplo.com"}]}'
 
@@ -35,8 +35,8 @@ curl http://localhost:8080/clientes/1/contatos
 
 Ainda **não** implementados (planejados nas issues):
 
-- Bean Validation e resposta 400 (#10)
-- Tratamento global de erros em `ProblemDetail`, incluindo 404 para cliente inexistente (#11)
+- Bean Validation e resposta 400 (#10). Hoje entrada inválida (por exemplo, `nome` ausente) responde **500**
+- Tratamento global de erros em `ProblemDetail`, incluindo 404 para cliente inexistente (#11). Hoje cliente inexistente responde **500**
 - Swagger/OpenAPI (#15), Flyway (#16), Dockerfile (#17) e GitHub Actions (#18)
 - A listagem `GET /clientes` não tem paginação
 
@@ -59,7 +59,7 @@ docker compose up -d --wait
 ./mvnw spring-boot:run
 ```
 
-No Windows (PowerShell), use `Copy-Item .env.example .env` e `.\mvnw.cmd spring-boot:run`.
+No Windows (PowerShell), use `Copy-Item .env.example .env` e `.\mvnw.cmd spring-boot:run`. Os `curl` da seção Exemplos são para Bash; no PowerShell use `Invoke-RestMethod` (ou `curl.exe` com o JSON em um arquivo, `-d @corpo.json`).
 
 ### Configuração
 
