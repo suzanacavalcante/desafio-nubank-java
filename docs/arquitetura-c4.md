@@ -1,0 +1,282 @@
+# Documentação de arquitetura (modelo C4)
+
+API REST de **clientes e contatos** (1 cliente → N contatos), desafio técnico backend.
+Os diagramas usam [Mermaid](https://mermaid.js.org/) (sintaxe C4), então renderizam direto no GitHub e no VS Code.
+
+> **Estado documentado:** branch `main` após o merge do PR #30 (endpoints #6–#9 prontos).
+> Itens planejados e **ainda não implementados** aparecem marcados como *(planejado)* e em tracejado:
+> Bean Validation (#10), tratamento global de erros (#11), Flyway (#16), Swagger (#15), Dockerfile (#17), CI (#18).
+
+---
+
+## Nível 1 – Contexto do sistema
+
+Quem usa o sistema e com o que ele conversa.
+
+```mermaid
+C4Context
+    title Nível 1 – Contexto: API de Clientes e Contatos
+
+    Person(consumidor, "Consumidor da API", "Pessoa desenvolvedora, avaliador do desafio ou aplicação cliente (curl, Postman, front-end)")
+    System(api, "API Clientes e Contatos", "Cadastra clientes e seus contatos e permite consultá-los via HTTP/JSON")
+    SystemDb_Ext(pg, "PostgreSQL 16", "Persistência dos clientes e contatos")
+
+    Rel(consumidor, api, "Usa", "HTTP/JSON")
+    Rel(api, pg, "Lê e grava", "JDBC")
+```
+
+| Elemento | Descrição |
+|---|---|
+| Consumidor da API | Qualquer cliente HTTP. Não há autenticação nem autorização (fora do escopo do desafio). |
+| API Clientes e Contatos | O sistema construído neste repositório. |
+| PostgreSQL 16 | Banco relacional. Em desenvolvimento roda em Docker Compose, publicado só em `127.0.0.1`. |
+
+---
+
+## Nível 2 – Contêineres
+
+Unidades executáveis e de armazenamento.
+
+```mermaid
+C4Container
+    title Nível 2 – Contêineres
+
+    Person(consumidor, "Consumidor da API", "curl, Postman, front-end")
+
+    System_Boundary(sistema, "API Clientes e Contatos") {
+        Container(app, "Aplicação Spring Boot", "Java 21, Spring Boot 4.1.2, Spring MVC, Spring Data JPA", "Expõe a API REST, aplica regras de negócio e acessa o banco")
+        ContainerDb(db, "Banco de dados", "PostgreSQL 16 (Docker Compose)", "Tabelas clientes e contatos")
+    }
+
+    Rel(consumidor, app, "Requisições REST", "HTTP/JSON")
+    Rel(app, db, "SQL via Hibernate/JPA", "JDBC, porta DB_PORT (padrão 5434)")
+```
+
+| Contêiner | Tecnologia | Responsabilidade |
+|---|---|---|
+| Aplicação Spring Boot | Java 21, Spring Boot 4.1.2, Maven Wrapper, Lombok | API REST, transações, mapeamento DTO ↔ entidade, persistência com JPA. Empacotada como jar (`desafio-nubank-java-0.0.1-SNAPSHOT.jar`). |
+| Banco de dados | PostgreSQL 16, imagem oficial, volume `pgdata`, *healthcheck* `pg_isready` | Guarda os dados. Schema gerado pelo Hibernate (`ddl-auto: update`) só no perfil `dev`; nos testes e no jar é `none`. *(planejado: Flyway, #16)* |
+
+### Configuração e ambientes
+
+- Credenciais vêm do `.env` (não versionado; modelo em `.env.example`) ou de variáveis de ambiente: `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`. `DB_USER` e `DB_PASSWORD` não têm valor padrão na aplicação.
+- O mesmo `.env` alimenta o Docker Compose e o Spring (`spring.config.import: optional:file:.env[.properties]`).
+- Perfil `dev` (ativado por `./mvnw spring-boot:run`): `ddl-auto: update`, SQL formatado e log do Hibernate em `debug`.
+- `spring.jpa.open-in-view: false`: todo mapeamento para DTO acontece dentro da transação do service.
+
+---
+
+## Nível 3 – Componentes (Aplicação Spring Boot)
+
+O código é organizado **por feature** (`cliente`, `contato`, `config`) no pacote base `io.github.suzanacavalcante.desafio`, seguindo camadas Controller → Service → Repository.
+
+```mermaid
+C4Component
+    title Nível 3 – Componentes da Aplicação Spring Boot
+
+    Person(consumidor, "Consumidor da API")
+    ContainerDb(db, "PostgreSQL 16", "Banco relacional")
+
+    Container_Boundary(app, "Aplicação Spring Boot") {
+
+        Boundary(fCliente, "Feature cliente") {
+            Component(cCtrl, "ClienteController", "@RestController /clientes", "POST /clientes, GET /clientes, GET /clientes/{id}/contatos")
+            Component(cSvc, "ClienteService", "@Service", "Criar, listar e consultar contatos de um cliente")
+            Component(cRepo, "ClienteRepository", "Spring Data JPA", "save, existsById, findAllComContatos (JOIN FETCH)")
+            Component(cMap, "ClienteMapper", "Classe utilitária", "ClienteRequest → Cliente; Cliente → ClienteResponse")
+            Component(cEnt, "Cliente", "@Entity clientes", "Raiz do agregado. Gerencia a coleção de contatos")
+            Component(cExc, "ClienteNaoEncontradoException", "RuntimeException", "Sinaliza cliente inexistente")
+        }
+
+        Boundary(fContato, "Feature contato") {
+            Component(tCtrl, "ContatoController", "@RestController /contatos", "POST /contatos")
+            Component(tSvc, "ContatoService", "@Service", "Cria contato para cliente existente")
+            Component(tRepo, "ContatoRepository", "Spring Data JPA", "save, findByClienteIdOrderById")
+            Component(tMap, "ContatoMapper", "Classe utilitária", "DTOs ↔ Contato")
+            Component(tEnt, "Contato", "@Entity contatos", "Telefone, e-mail e referência LAZY ao cliente")
+        }
+
+        Component(dto, "DTOs (records)", "Java records", "ClienteRequest/Response, ContatoRequest, NovoContatoRequest, ContatoResponse")
+        Component(cfg, "config", "pacote", "Reservado. Tratamento global de erros em ProblemDetail (planejado, #11)")
+    }
+
+    Rel(consumidor, cCtrl, "HTTP/JSON")
+    Rel(consumidor, tCtrl, "HTTP/JSON")
+
+    Rel(cCtrl, cSvc, "Chama")
+    Rel(tCtrl, tSvc, "Chama")
+
+    Rel(cSvc, cRepo, "Usa")
+    Rel(cSvc, tRepo, "Consulta contatos do cliente")
+    Rel(cSvc, cMap, "Mapeia")
+    Rel(cSvc, tMap, "Mapeia contatos")
+    Rel(cSvc, cExc, "Lança")
+
+    Rel(tSvc, cRepo, "Busca o cliente (findById)")
+    Rel(tSvc, tRepo, "Salva contato")
+    Rel(tSvc, tMap, "Mapeia")
+    Rel(tSvc, cExc, "Lança")
+
+    Rel(cMap, cEnt, "Cria/lê")
+    Rel(tMap, tEnt, "Cria/lê")
+    Rel(cMap, tMap, "Delega contatos")
+    Rel(cEnt, tEnt, "1 → N (OneToMany, cascade ALL, orphanRemoval)")
+    Rel(tEnt, cEnt, "N → 1 (ManyToOne LAZY)")
+
+    Rel(cRepo, db, "JPA/JDBC")
+    Rel(tRepo, db, "JPA/JDBC")
+```
+
+### Responsabilidades
+
+| Componente | Papel | Observações relevantes |
+|---|---|---|
+| `ClienteController` | Camada web de `/clientes`. | `POST` devolve **201**. Ainda sem `@Valid`. |
+| `ContatoController` | Camada web de `/contatos`. | `POST` devolve **201**; `clienteId` vem no corpo. |
+| `ClienteService` | Casos de uso de cliente. | `criar` é `@Transactional`; `listar` e `contatosDoCliente` são `readOnly`. Cliente inexistente → `ClienteNaoEncontradoException`. |
+| `ContatoService` | Caso de uso de criação de contato. | Busca o cliente com `findById`, associa e salva, mapeia dentro da transação. |
+| `ClienteRepository` | Acesso a `clientes`. | `findAllComContatos` usa `left join fetch` ordenado por `c.id, ct.id` (evita N+1). |
+| `ContatoRepository` | Acesso a `contatos`. | `findByClienteIdOrderById` garante ordem estável. |
+| `ClienteMapper` / `ContatoMapper` | Conversão DTO ↔ entidade. | `ContatoMapper.toEntity` **não** associa o cliente; quem associa é o service ou `Cliente.adicionarContato`. |
+| `Cliente` | Raiz do agregado. | `getContatos()` é somente leitura; alterações via `adicionarContato` (idempotente; rejeita contato de outro cliente) e `removerContato`. Limite de `nome`: 150. |
+| `Contato` | Entidade filha. | Limites: `telefone` 30, `email` 254. FK `cliente_id` NOT NULL. |
+| DTOs | Contrato da API. | `record`s, hoje sem validação. |
+
+---
+
+## Nível 4 – Código
+
+Modelo de domínio e esquema físico. Para o restante, o código-fonte é a referência.
+
+### Modelo de classes (domínio)
+
+```mermaid
+classDiagram
+    class Cliente {
+        +Long id
+        +String nome  «NOT NULL, 150»
+        +List~Contato~ getContatos()  «somente leitura»
+        +adicionarContato(Contato)
+        +boolean removerContato(Contato)
+    }
+    class Contato {
+        +Long id
+        +String telefone  «NOT NULL, 30»
+        +String email  «NOT NULL, 254»
+        +Cliente cliente  «LAZY, NOT NULL»
+    }
+    Cliente "1" o-- "0..*" Contato : contatos\n(cascade ALL, orphanRemoval)
+```
+
+### Esquema físico
+
+```mermaid
+erDiagram
+    CLIENTES ||--o{ CONTATOS : possui
+    CLIENTES {
+        bigint id PK "IDENTITY"
+        varchar_150 nome "NOT NULL"
+    }
+    CONTATOS {
+        bigint id PK "IDENTITY"
+        varchar_30 telefone "NOT NULL"
+        varchar_254 email "NOT NULL"
+        bigint cliente_id FK "NOT NULL"
+    }
+```
+
+A FK gerada pelo Hibernate **não** tem `ON DELETE CASCADE` nem índice em `contatos.cliente_id`; ambos estão previstos para a migração Flyway (#16).
+
+### Contrato da API
+
+| Método | Rota | Corpo | Sucesso | Erros |
+|---|---|---|---|---|
+| POST | `/clientes` | `{ nome, contatos?: [{ telefone, email }] }` | 201 `ClienteResponse` | 400 *(planejado, #10)* |
+| POST | `/contatos` | `{ clienteId, telefone, email }` | 201 `ContatoResponse` | 400 *(planejado, #10)*, 404 *(mapeamento planejado, #11)* |
+| GET | `/clientes` | – | 200 lista de `ClienteResponse` com contatos | – |
+| GET | `/clientes/{id}/contatos` | – | 200 lista de `ContatoResponse` | 404 *(mapeamento planejado, #11)* |
+
+> Hoje `ClienteNaoEncontradoException` é lançada, mas não há `@RestControllerAdvice`; enquanto a #11 não for feita, o status efetivo de cliente inexistente depende do tratamento padrão do Spring. Confirme nos testes antes de documentar como 404.
+
+### Fluxo: criar contato (`POST /contatos`)
+
+```mermaid
+sequenceDiagram
+    actor C as Consumidor
+    participant CC as ContatoController
+    participant CS as ContatoService
+    participant CR as ClienteRepository
+    participant TR as ContatoRepository
+    participant DB as PostgreSQL
+
+    C->>CC: POST /contatos {clienteId, telefone, email}
+    CC->>CS: criar(request)
+    activate CS
+    Note over CS: @Transactional
+    CS->>CR: findById(clienteId)
+    CR->>DB: SELECT clientes
+    alt cliente não existe
+        CS-->>CC: ClienteNaoEncontradoException
+    else existe
+        CS->>CS: ContatoMapper.toEntity + setCliente
+        CS->>TR: save(contato)
+        TR->>DB: INSERT contatos
+        CS->>CS: ContatoMapper.toResponse (dentro da transação)
+        CS-->>CC: ContatoResponse
+        CC-->>C: 201 Created
+    end
+    deactivate CS
+```
+
+### Fluxo: listar clientes (`GET /clientes`)
+
+```mermaid
+sequenceDiagram
+    actor C as Consumidor
+    participant CC as ClienteController
+    participant CS as ClienteService
+    participant CR as ClienteRepository
+    participant DB as PostgreSQL
+
+    C->>CC: GET /clientes
+    CC->>CS: listar()
+    Note over CS: @Transactional(readOnly)
+    CS->>CR: findAllComContatos()
+    CR->>DB: SELECT ... LEFT JOIN FETCH (1 consulta, sem N+1)
+    DB-->>CR: linhas
+    CS->>CS: ClienteMapper.toResponse (coleção já carregada)
+    CS-->>CC: List<ClienteResponse>
+    CC-->>C: 200 OK
+```
+
+---
+
+## Decisões arquiteturais
+
+| Decisão | Motivo |
+|---|---|
+| Pacotes **por feature** | Alta coesão; cada feature carrega controller, service, repository, mapper e DTOs. |
+| `Cliente` como **raiz do agregado** | Coleção encapsulada (lista imutável) e invariantes em `adicionarContato`/`removerContato`. |
+| **DTOs em `record`**, sem expor entidades | Evita `LazyInitializationException` na serialização e recursão JSON cliente↔contato. |
+| `open-in-view: false` + mapeamento no service | Acesso preguiçoso só dentro da transação; falha cedo se alguém mapear fora. |
+| `JOIN FETCH` na listagem | Uma consulta em vez de N+1 (ver a ressalva: sem paginação, o custo cresce com o volume). |
+| `ddl-auto: update` só no perfil `dev` | Provisório até o Flyway; teste e jar usam `none`. |
+| Credenciais sem valor padrão | Segredos nunca ficam no código; vêm do `.env`/ambiente. |
+
+## Qualidade e testes
+
+- Pirâmide: testes unitários (entidades, mappers, services com Mockito), `@WebMvcTest` nos controllers, `@DataJpaTest` no repositório e testes de API que sobem o contexto completo (`*ApiTest`).
+- Testes de contrato ainda não atendido ficam sob a tag `bug-conhecido`, excluída por padrão (`excludedGroups` no `pom.xml`); rode com `-Dgroups=bug-conhecido -DexcludedGroups=nenhum`.
+- Os testes que sobem o contexto precisam do PostgreSQL ativo (`docker compose up -d --wait`). *(planejado: Testcontainers, #14)*
+
+## Evolução prevista
+
+| Issue | Mudança | Impacto no C4 |
+|---|---|---|
+| #10 | Bean Validation | DTOs e controllers com `@Valid`; 400 com mapa campo→mensagem |
+| #11 | Tratamento global de erros | Novo componente `ApiExceptionHandler` em `config`, respostas `ProblemDetail` (RFC 7807) |
+| #14 | Testcontainers | Novo contêiner de teste (Postgres efêmero) |
+| #15 | Swagger/OpenAPI | Novo componente de documentação da API (springdoc compatível com Boot 4) |
+| #16 | Flyway | Migrações versionadas substituem `ddl-auto`; `ON DELETE CASCADE` e índice em `contatos.cliente_id` |
+| #17 | Dockerfile + Compose | Aplicação passa a ser contêiner junto com o banco |
+| #18 | GitHub Actions | Novo sistema externo (CI) no nível de contexto |
