@@ -5,6 +5,8 @@ import io.github.suzanacavalcante.desafio.cliente.dto.ClienteResponse;
 import io.github.suzanacavalcante.desafio.contato.dto.ContatoRequest;
 import io.github.suzanacavalcante.desafio.contato.dto.ContatoResponse;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -12,6 +14,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -142,6 +145,38 @@ class ClienteControllerTest {
     @Test
     void idNaoNumericoRetorna400SemChamarOService() throws Exception {
         mockMvc.perform(get("/clientes/abc/contatos"))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(service);
+    }
+
+    /** Validação de {@code POST /clientes} sem banco (o service nunca é chamado). */
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "{}",
+            "{\"nome\":null}",
+            "{\"nome\":\"\"}",
+            "{\"nome\":\"   \"}",
+            "{\"nome\":\"Ana\\u0000\"}",
+            "{\"nome\":\"Ana\\uD800\"}",
+            "{\"nome\":\"Ana\",\"contatos\":[null]}",
+            "{\"nome\":\"Ana\",\"contatos\":[{\"telefone\":\"1\"}]}",
+            "{\"nome\":\"Ana\",\"contatos\":[{\"telefone\":\"1\\u0000\",\"email\":\"a@x.com\"}]}",
+            "{\"nome\":\"Ana\",\"contatos\":[{\"telefone\":\"1\",\"email\":\"lixo\"}]}"})
+    void corpoInvalidoRetorna400ENaoChegaAoService(String json) throws Exception {
+        mockMvc.perform(post("/clientes").contentType(MediaType.APPLICATION_JSON).content(json))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(service);
+    }
+
+    @Test
+    void maisContatosQueOLimiteRetorna400ENaoChegaAoService() throws Exception {
+        String contatos = String.join(",", Collections.nCopies(ClienteRequest.CONTATOS_MAX + 1,
+                "{\"telefone\":\"1\",\"email\":\"a@x.com\"}"));
+
+        mockMvc.perform(post("/clientes").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"nome\":\"Ana\",\"contatos\":[" + contatos + "]}"))
                 .andExpect(status().isBadRequest());
 
         verifyNoInteractions(service);

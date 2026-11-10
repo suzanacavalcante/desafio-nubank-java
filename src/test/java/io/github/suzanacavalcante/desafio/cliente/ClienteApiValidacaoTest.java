@@ -11,6 +11,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -111,9 +114,9 @@ class ClienteApiValidacaoTest {
     }
 
     private String contatos(int quantidade) {
-        return java.util.stream.IntStream.rangeClosed(1, quantidade)
+        return IntStream.rangeClosed(1, quantidade)
                 .mapToObj(i -> "{\"telefone\":\"" + i + "\",\"email\":\"c" + i + "@x.com\"}")
-                .collect(java.util.stream.Collectors.joining(",", "[", "]"));
+                .collect(Collectors.joining(",", "[", "]"));
     }
 
     @Test
@@ -138,5 +141,28 @@ class ClienteApiValidacaoTest {
     @Test
     void deveRejeitarCaractereNuloNoTelefoneDeContatoAninhado() throws Exception {
         esperar400("{\"nome\":\"" + MARCA + "10\",\"contatos\":[{\"telefone\":\"1\\u00002\",\"email\":\"a@x.com\"}]}");
+    }
+
+    /** Surrogate UTF-16 solto (BUG-5 do QA): o driver o gravaria como "?", diferente do que a resposta devolve. */
+    @Test
+    void deveRejeitarSurrogateSoltoNoNome() throws Exception {
+        esperar400("{\"nome\":\"" + MARCA + "11\\uD800b\"}");
+    }
+
+    @Test
+    void deveRejeitarSurrogateSoltoNoTelefoneDeContatoAninhado() throws Exception {
+        esperar400("{\"nome\":\"" + MARCA + "12\",\"contatos\":[{\"telefone\":\"1\\uDC00\",\"email\":\"a@x.com\"}]}");
+    }
+
+    /** O par de surrogates válido (emoji) continua aceito e é gravado fielmente. */
+    @Test
+    void aceitaEmojiNoNomeEGravaFielmente() throws Exception {
+        String nome = MARCA + "13-\\uD83D\\uDE00";
+        mockMvc.perform(post("/clientes").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"nome\":\"" + nome + "\"}"))
+                .andExpect(status().isCreated());
+
+        assertEquals(MARCA + "13-" + new String(Character.toChars(0x1F600)),
+                jdbc.queryForObject("select nome from clientes where nome like ?", String.class, MARCA + "13-%"));
     }
 }

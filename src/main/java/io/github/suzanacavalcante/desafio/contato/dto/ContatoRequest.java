@@ -1,7 +1,7 @@
 package io.github.suzanacavalcante.desafio.contato.dto;
 
 import io.github.suzanacavalcante.desafio.contato.Contato;
-import io.github.suzanacavalcante.desafio.config.SemCaractereNulo;
+import io.github.suzanacavalcante.desafio.validacao.SemCaracteresInvalidos;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -13,6 +13,6 @@ import jakarta.validation.constraints.Size;
  * @param email    obrigatório, em formato de e-mail válido
  */
 public record ContatoRequest(
-        @NotBlank @SemCaractereNulo @Size(max = Contato.TELEFONE_MAX) String telefone,
+        @NotBlank @SemCaracteresInvalidos @Size(max = Contato.TELEFONE_MAX) String telefone,
         @NotBlank @Email @Size(max = Contato.EMAIL_MAX) String email) {
 }

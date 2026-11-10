@@ -115,4 +115,17 @@ class ContatoControllerTest {
 
         verifyNoInteractions(service);
     }
+
+    @Test
+    void telefoneComSurrogateSoltoRetorna400EComParValidoRetorna201() throws Exception {
+        mockMvc.perform(post("/contatos").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"clienteId\":7,\"telefone\":\"1\\uD800\",\"email\":\"a@x.com\"}"))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(service);
+
+        when(service.criar(any())).thenReturn(new ContatoResponse(1L, "t", "e", 7L));
+        mockMvc.perform(post("/contatos").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"clienteId\":7,\"telefone\":\"\\uD83D\\uDE00\",\"email\":\"a@x.com\"}"))
+                .andExpect(status().isCreated());
+    }
 }
