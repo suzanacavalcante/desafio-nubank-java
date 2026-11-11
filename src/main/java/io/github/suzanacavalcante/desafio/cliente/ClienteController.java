@@ -3,6 +3,7 @@ package io.github.suzanacavalcante.desafio.cliente;
 import io.github.suzanacavalcante.desafio.cliente.dto.ClienteRequest;
 import io.github.suzanacavalcante.desafio.cliente.dto.ClienteResponse;
 import io.github.suzanacavalcante.desafio.contato.dto.ContatoResponse;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -23,7 +24,7 @@ public class ClienteController {
     private final ClienteService clienteService;
 
     @PostMapping
-    public ResponseEntity<ClienteResponse> criar(@RequestBody ClienteRequest request) {
+    public ResponseEntity<ClienteResponse> criar(@Valid @RequestBody ClienteRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(clienteService.criar(request));
     }
 
