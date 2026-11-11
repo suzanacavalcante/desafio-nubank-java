@@ -31,12 +31,27 @@ curl http://localhost:8080/clientes
 curl http://localhost:8080/clientes/1/contatos
 ```
 
+### Erros
+
+Toda resposta de erro é um `ProblemDetail` (`application/problem+json`, RFC 7807), sem stack trace e sem ecoar o valor rejeitado:
+
+| Situação | Status |
+|---|---|
+| Campo inválido (`@Valid`) | **400**, com `erros` (campo → mensagem, em português) |
+| JSON malformado ou de tipo errado; `{id}` que não é número | **400** |
+| Cliente inexistente (`POST /contatos`, `GET /clientes/{id}/contatos`) | **404** |
+| Método ou rota inexistente | **405** / **404** |
+| Erro inesperado | **500** genérico (o detalhe fica só no log) |
+
+```json
+{"title":"Dados inválidos","status":400,"detail":"Há campos inválidos na requisição.",
+ "instance":"/clientes","erros":{"nome":"não deve estar em branco","contatos[0].email":"deve ser um endereço de e-mail bem formado"}}
+```
+
 ### Limitações atuais
 
 Ainda **não** implementados (planejados nas issues):
 
-- Bean Validation e resposta 400 (#10). Hoje entrada inválida (por exemplo, `nome` ausente) responde **500**
-- Tratamento global de erros em `ProblemDetail`, incluindo 404 para cliente inexistente (#11). Hoje cliente inexistente responde **500**
 - Swagger/OpenAPI (#15), Flyway (#16), Dockerfile (#17) e GitHub Actions (#18)
 - A listagem `GET /clientes` não tem paginação
 
@@ -83,7 +98,7 @@ No Windows (PowerShell), use `Copy-Item .env.example .env` e `.\mvnw.cmd spring-
 
 Cobrem entidades, mappers, services (Mockito), controllers (`@WebMvcTest`), repositórios (`@DataJpaTest`) e a API de ponta a ponta. Por enquanto os testes que sobem o contexto precisam do banco no ar (`docker compose up -d`); a issue #14 troca isso por Testcontainers.
 
-Testes de regressão de bugs ainda abertos têm a tag `bug-conhecido` e ficam fora por padrão. Para rodá-los:
+Testes de regressão de bugs conhecidos e ainda abertos devem ter a tag `bug-conhecido` e ficam fora por padrão. Para rodá-los:
 
 ```bash
 ./mvnw test -Dgroups=bug-conhecido -DexcludedGroups=nenhum

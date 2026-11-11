@@ -2,15 +2,14 @@ package io.github.suzanacavalcante.desafio.cliente;
 
 import io.github.suzanacavalcante.desafio.contato.Contato;
 import jakarta.persistence.EntityManagerFactory;
-import jakarta.servlet.ServletException;
 import org.hibernate.SessionFactory;
 import org.hibernate.stat.Statistics;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -19,9 +18,8 @@ import java.util.Arrays;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -127,30 +125,13 @@ class ClienteContatosApiTest {
     /** Nenhuma sequência chega a este valor, então o cliente nunca existe. */
     private static final long ID_INEXISTENTE = Long.MAX_VALUE;
 
-    /**
-     * Comportamento <b>atual</b>: sem o tratamento global de erros (issue #11) a exceção de domínio
-     * atravessa o MockMvc. O ponto importante é que <b>não</b> vira 200 com lista vazia.
-     * <p>
-     * Na #11, trocar este {@code assertThrows} pelo teste de contrato abaixo (remover a tag e este método).
-     */
+    /** Cliente inexistente: 404 no formato padrão de erro, e não 200 com lista vazia. */
     @Test
-    void clienteInexistenteLancaExcecaoDeDominioEmVezDeListaVazia() {
-        ServletException ex = assertThrows(ServletException.class,
-                () -> mockMvc.perform(get("/clientes/{id}/contatos", ID_INEXISTENTE)));
-
-        assertInstanceOf(ClienteNaoEncontradoException.class, ex.getCause());
-    }
-
-    /**
-     * <b>Contrato desejado</b> (critério de aceite da #11): cliente inexistente responde 404.
-     * Falha de propósito até a #11; ao implementá-la, remover a tag {@code bug-conhecido} e o teste
-     * {@code clienteInexistenteLancaExcecaoDeDominioEmVezDeListaVazia}. Rodar com
-     * {@code -Dgroups=bug-conhecido -DexcludedGroups=nenhum}.
-     */
-    @Test
-    @Tag("bug-conhecido")
     void clienteInexistenteRetorna404() throws Exception {
         mockMvc.perform(get("/clientes/{id}/contatos", ID_INEXISTENTE))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isNotFound())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.detail").value("Cliente " + ID_INEXISTENTE + " não encontrado"));
     }
 }

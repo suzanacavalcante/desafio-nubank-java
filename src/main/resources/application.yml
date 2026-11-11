@@ -9,7 +9,20 @@ spring:
     # Sem valores padrão: credenciais vêm do .env ou do ambiente
     username: ${DB_USER}
     password: ${DB_PASSWORD}
+  web:
+    # Idioma fixo: as mensagens de validação (Hibernate Validator) saem sempre em português,
+    # independentemente do idioma da máquina ou do cabeçalho Accept-Language.
+    locale: pt-BR
+    locale-resolver: fixed
   jpa:
     open-in-view: false
     hibernate:
       ddl-auto: none
+
+server:
+  error:
+    # Páginas de erro do container (fora do MVC) também não vazam detalhes
+    include-stacktrace: never
+    include-message: never
+    include-binding-errors: never
+    include-exception: false

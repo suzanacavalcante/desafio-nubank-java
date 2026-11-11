@@ -2,10 +2,7 @@ package io.github.suzanacavalcante.desafio.contato;
 
 import io.github.suzanacavalcante.desafio.cliente.Cliente;
 import io.github.suzanacavalcante.desafio.cliente.ClienteRepository;
-import io.github.suzanacavalcante.desafio.cliente.ClienteNaoEncontradoException;
-import jakarta.servlet.ServletException;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -20,9 +17,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -98,37 +94,20 @@ class ContatoApiTest {
         assertEquals(2, contatosDoCliente(clienteId));
     }
 
-    private long idDeClienteInexistente() {
-        return jdbc.queryForObject("select coalesce(max(id), 0) + 100000 from clientes", Long.class);
-    }
+    /** Nenhuma sequência chega a este valor, então o cliente nunca existe. */
+    private static final long ID_INEXISTENTE = Long.MAX_VALUE;
 
-    /**
-     * Comportamento <b>atual</b>: sem o tratamento global de erros (issue #11) a exceção de domínio
-     * atravessa o MockMvc. Que nada é gravado é provado em {@code ContatoServiceTest}
-     * ({@code verify(contatoRepository, never()).save(...)}); a FK impediria a gravação de qualquer forma.
-     * <p>
-     * Na #11, trocar este {@code assertThrows} pelo teste de contrato abaixo (remover a tag e este método).
-     */
+    /** Cliente inexistente: 404 no formato padrão de erro (ProblemDetail), e nada é gravado. */
     @Test
-    void clienteInexistenteLancaExcecaoDeDominio() {
-        long idInexistente = idDeClienteInexistente();
-
-        ServletException ex = assertThrows(ServletException.class, () -> postar(
-                "{\"clienteId\":" + idInexistente + ",\"telefone\":\"48123\",\"email\":\"a@x.com\"}"));
-
-        assertInstanceOf(ClienteNaoEncontradoException.class, ex.getCause());
-    }
-
-    /**
-     * <b>Contrato desejado</b> (critério de aceite da #11): cliente inexistente responde 404.
-     * Falha de propósito até a #11; ao implementá-la, remover a tag {@code bug-conhecido} e o teste
-     * {@code clienteInexistenteLancaExcecaoDeDominio}. Rodar com
-     * {@code -Dgroups=bug-conhecido -DexcludedGroups=nenhum}.
-     */
-    @Test
-    @Tag("bug-conhecido")
     void clienteInexistenteRetorna404() throws Exception {
-        postar("{\"clienteId\":" + idDeClienteInexistente() + ",\"telefone\":\"48123\",\"email\":\"a@x.com\"}")
-                .andExpect(status().isNotFound());
+        postar("{\"clienteId\":" + ID_INEXISTENTE + ",\"telefone\":\"48123\",\"email\":\"a@x.com\"}")
+                .andExpect(status().isNotFound())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.detail").value("Cliente " + ID_INEXISTENTE + " não encontrado"));
+
+        assertEquals(0, jdbc.queryForObject(
+                "select count(*) from contatos where telefone = '48123' and email = 'a@x.com' and cliente_id = ?",
+                Integer.class, ID_INEXISTENTE));
     }
 }

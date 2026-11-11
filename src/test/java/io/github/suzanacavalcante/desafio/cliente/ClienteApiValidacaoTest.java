@@ -16,6 +16,8 @@ import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -164,5 +166,17 @@ class ClienteApiValidacaoTest {
 
         assertEquals(MARCA + "13-" + new String(Character.toChars(0x1F600)),
                 jdbc.queryForObject("select nome from clientes where nome like ?", String.class, MARCA + "13-%"));
+    }
+
+    /** Formato do erro no contexto completo: ProblemDetail com o campo e a mensagem em português. */
+    @Test
+    void respostaDeValidacaoTemOCampoEAMensagemEmPortugues() throws Exception {
+        mockMvc.perform(post("/clientes").contentType(MediaType.APPLICATION_JSON)
+                        .header("Accept-Language", "en-US")
+                        .content("{\"nome\":\"" + MARCA + "14\",\"contatos\":[{\"telefone\":\"1\",\"email\":\"lixo\"}]}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content()
+                        .contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.erros['contatos[0].email']").value("deve ser um endereço de e-mail bem formado"));
     }
 }
