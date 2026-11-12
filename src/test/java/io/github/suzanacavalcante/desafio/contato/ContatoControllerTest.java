@@ -84,9 +84,9 @@ class ContatoControllerTest {
 
     @Test
     void telefoneEEmailAcimaDoLimiteRetornam400() throws Exception {
-        String telefoneLongo = "{\"clienteId\":7,\"telefone\":\"" + "1".repeat(Contato.TELEFONE_MAX + 1)
+        String telefoneLongo = "{\"clienteId\":7,\"telefone\":\"" + "1".repeat(31)
                 + "\",\"email\":\"a@x.com\"}";
-        String emailLongo = "{\"clienteId\":7,\"telefone\":\"1\",\"email\":\"" + emailComTamanho(Contato.EMAIL_MAX + 1)
+        String emailLongo = "{\"clienteId\":7,\"telefone\":\"1\",\"email\":\"" + emailComTamanho(255)
                 + "\"}";
 
         for (String json : new String[] {telefoneLongo, emailLongo}) {
@@ -99,8 +99,8 @@ class ContatoControllerTest {
     @Test
     void valoresNoLimiteExatoSaoAceitos() throws Exception {
         when(service.criar(any())).thenReturn(new ContatoResponse(1L, "t", "e", 7L));
-        String json = "{\"clienteId\":7,\"telefone\":\"" + "1".repeat(Contato.TELEFONE_MAX)
-                + "\",\"email\":\"" + emailComTamanho(Contato.EMAIL_MAX) + "\"}";
+        String json = "{\"clienteId\":7,\"telefone\":\"" + "1".repeat(30)
+                + "\",\"email\":\"" + emailComTamanho(254) + "\"}";
 
         mockMvc.perform(post("/contatos").contentType(MediaType.APPLICATION_JSON).content(json))
                 .andExpect(status().isCreated());

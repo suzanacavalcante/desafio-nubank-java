@@ -2,7 +2,6 @@ package io.github.suzanacavalcante.desafio.cliente;
 
 import io.github.suzanacavalcante.desafio.cliente.dto.ClienteRequest;
 import io.github.suzanacavalcante.desafio.cliente.dto.ClienteResponse;
-import io.github.suzanacavalcante.desafio.contato.Contato;
 import io.github.suzanacavalcante.desafio.contato.dto.ContatoRequest;
 import io.github.suzanacavalcante.desafio.contato.dto.ContatoResponse;
 import org.junit.jupiter.api.Test;
@@ -174,7 +173,7 @@ class ClienteControllerTest {
 
     @Test
     void maisContatosQueOLimiteRetorna400ENaoChegaAoService() throws Exception {
-        String contatos = String.join(",", Collections.nCopies(ClienteRequest.CONTATOS_MAX + 1,
+        String contatos = String.join(",", Collections.nCopies(51,
                 "{\"telefone\":\"1\",\"email\":\"a@x.com\"}"));
 
         mockMvc.perform(post("/clientes").contentType(MediaType.APPLICATION_JSON)
@@ -212,14 +211,14 @@ class ClienteControllerTest {
         when(service.criar(any())).thenReturn(new ClienteResponse(1L, "n", List.of()));
 
         mockMvc.perform(post("/clientes").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"nome\":\"" + "a".repeat(Cliente.NOME_MAX) + "\"}"))
+                        .content("{\"nome\":\"" + "a".repeat(150) + "\"}"))
                 .andExpect(status().isCreated());
     }
 
     @Test
     void nomeAcimaDoLimiteRetorna400ComOCampoNoErro() throws Exception {
         mockMvc.perform(post("/clientes").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"nome\":\"" + "a".repeat(Cliente.NOME_MAX + 1) + "\"}"))
+                        .content("{\"nome\":\"" + "a".repeat(151) + "\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.erros.nome").isNotEmpty());
 
@@ -247,8 +246,8 @@ class ClienteControllerTest {
 
     @Test
     void telefoneEEmailAcimaDoLimiteDoContatoRetornam400() throws Exception {
-        String telefoneLongo = "{\"telefone\":\"" + "1".repeat(Contato.TELEFONE_MAX + 1) + "\",\"email\":\"a@x.com\"}";
-        String emailLongo = "{\"telefone\":\"1\",\"email\":\"" + emailComTamanho(Contato.EMAIL_MAX + 1) + "\"}";
+        String telefoneLongo = "{\"telefone\":\"" + "1".repeat(31) + "\",\"email\":\"a@x.com\"}";
+        String emailLongo = "{\"telefone\":\"1\",\"email\":\"" + emailComTamanho(255) + "\"}";
 
         for (String contato : new String[] {telefoneLongo, emailLongo}) {
             mockMvc.perform(post("/clientes").contentType(MediaType.APPLICATION_JSON)
@@ -258,10 +257,25 @@ class ClienteControllerTest {
         verifyNoInteractions(service);
     }
 
+    /**
+     * Os limites desta classe são <b>literais de propósito</b> (50 contatos, nome 150, telefone 30, e-mail 254):
+     * se alguém mudar um limite da API, estes testes devem quebrar e ser alterados junto, em vez de
+     * acompanhar a constante sem ninguém notar.
+     */
+    @Test
+    void contatoAninhadoComTelefoneEEmailNoLimiteExatoEAceito() throws Exception {
+        when(service.criar(any())).thenReturn(new ClienteResponse(1L, "Ana", List.of()));
+        String contato = "{\"telefone\":\"" + "1".repeat(30) + "\",\"email\":\"" + emailComTamanho(254) + "\"}";
+
+        mockMvc.perform(post("/clientes").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"nome\":\"Ana\",\"contatos\":[" + contato + "]}"))
+                .andExpect(status().isCreated());
+    }
+
     @Test
     void listaComExatamenteOLimiteDeContatosEAceita() throws Exception {
         when(service.criar(any())).thenReturn(new ClienteResponse(1L, "Ana", List.of()));
-        String contatos = String.join(",", Collections.nCopies(ClienteRequest.CONTATOS_MAX,
+        String contatos = String.join(",", Collections.nCopies(50,
                 "{\"telefone\":\"1\",\"email\":\"a@x.com\"}"));
 
         mockMvc.perform(post("/clientes").contentType(MediaType.APPLICATION_JSON)

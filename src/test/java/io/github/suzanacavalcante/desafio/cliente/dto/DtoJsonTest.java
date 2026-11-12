@@ -49,7 +49,10 @@ class DtoJsonTest {
         assertEquals(3L, request.clienteId());
     }
 
-    /** O Boot desliga {@code FAIL_ON_UNKNOWN_PROPERTIES}: campo desconhecido no corpo é ignorado, não vira erro. */
+    /**
+     * O mapper vem do Boot (respeita {@code spring.jackson.*}); campo desconhecido no corpo é ignorado, não vira
+     * erro. No Jackson 3 isso já é o padrão; o que o teste prova é a configuração do Boot, não o padrão do Jackson.
+     */
     @Test
     void campoDesconhecidoNoCorpoEIgnorado() {
         ClienteRequest request = json.readValue("{\"nome\":\"Ana\",\"extra\":123}", ClienteRequest.class);
