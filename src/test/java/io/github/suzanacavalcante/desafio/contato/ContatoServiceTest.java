@@ -101,9 +101,14 @@ class ContatoServiceTest {
                 () -> service.criar(new NovoContatoRequest(7L, "48123", "a@x.com")));
     }
 
-    /** O cliente é buscado só por {@code findById}: nenhum método que carregue os contatos dele (LAZY). */
+    /**
+     * Guarda de <b>interação</b>: o cliente é buscado só por {@code findById}. Este {@code Cliente} não é um
+     * proxy do Hibernate, então o teste não prova que a coleção LAZY não é carregada; essa prova é a contagem
+     * de statements do Hibernate ({@code Statistics}) em um teste de integração (#14). Se um
+     * {@code ClienteRepository} novo for usado aqui de forma legítima, ajuste este teste.
+     */
     @Test
-    void buscaOClienteApenasPorFindById() {
+    void usaApenasFindByIdDoClienteRepository() {
         when(clienteRepository.findById(7L)).thenReturn(Optional.of(clienteComId(7L)));
         when(contatoRepository.save(any(Contato.class))).thenAnswer(inv -> inv.getArgument(0));
 

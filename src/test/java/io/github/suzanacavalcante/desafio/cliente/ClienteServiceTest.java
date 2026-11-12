@@ -113,14 +113,21 @@ class ClienteServiceTest {
         verifyNoInteractions(contatoRepository);
     }
 
+    /**
+     * O enunciado não pede unicidade de contato: este teste documenta que não há deduplicação (dois contatos
+     * idênticos viram dois). Se a regra mudar, troque o teste junto com ela.
+     */
     @Test
     void criarMantemContatosIguaisSemDeduplicar() {
         salvarAtribuindoIds();
-        var igual = new ContatoRequest("48123", "a@x.com");
+        var request = new ClienteRequest("Ana", List.of(
+                new ContatoRequest("48123", "a@x.com"),
+                new ContatoRequest("48123", "a@x.com")));
 
-        ClienteResponse response = service.criar(new ClienteRequest("Ana", List.of(igual, igual)));
+        ClienteResponse response = service.criar(request);
 
-        assertEquals(2, response.contatos().size());
+        assertEquals(List.of("48123", "48123"), response.contatos().stream().map(ContatoResponse::telefone).toList());
+        assertEquals(2, response.contatos().stream().map(ContatoResponse::id).distinct().count());
     }
 
     private static Cliente clienteComContatos(long id, String nome, long... idsDosContatos) {
