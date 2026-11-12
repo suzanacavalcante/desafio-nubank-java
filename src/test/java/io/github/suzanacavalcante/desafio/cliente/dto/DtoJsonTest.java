@@ -3,6 +3,8 @@ package io.github.suzanacavalcante.desafio.cliente.dto;
 import io.github.suzanacavalcante.desafio.contato.dto.ContatoResponse;
 import io.github.suzanacavalcante.desafio.contato.dto.NovoContatoRequest;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.json.JsonTest;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.util.List;
@@ -10,10 +12,16 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
-/** Garante o contrato JSON da API (Jackson 3, o padrão do Spring Boot 4) sem subir o Spring. */
+/**
+ * Garante o contrato JSON da API com o {@code JsonMapper} <b>configurado pelo Spring Boot</b> (Jackson 3),
+ * o mesmo que os controllers usam, em vez de um mapper criado à mão. {@code @JsonTest} sobe só a
+ * configuração de JSON, sem web nem banco.
+ */
+@JsonTest
 class DtoJsonTest {
 
-    private final JsonMapper json = JsonMapper.builder().build();
+    @Autowired
+    JsonMapper json;
 
     @Test
     void clienteRequestSemContatosDesserializaComListaNula() {
@@ -39,6 +47,14 @@ class DtoJsonTest {
                 "{\"clienteId\":3,\"telefone\":\"1\",\"email\":\"a@x.com\"}", NovoContatoRequest.class);
 
         assertEquals(3L, request.clienteId());
+    }
+
+    /** O Boot desliga {@code FAIL_ON_UNKNOWN_PROPERTIES}: campo desconhecido no corpo é ignorado, não vira erro. */
+    @Test
+    void campoDesconhecidoNoCorpoEIgnorado() {
+        ClienteRequest request = json.readValue("{\"nome\":\"Ana\",\"extra\":123}", ClienteRequest.class);
+
+        assertEquals("Ana", request.nome());
     }
 
     @Test

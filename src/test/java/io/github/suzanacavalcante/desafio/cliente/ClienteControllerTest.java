@@ -2,10 +2,12 @@ package io.github.suzanacavalcante.desafio.cliente;
 
 import io.github.suzanacavalcante.desafio.cliente.dto.ClienteRequest;
 import io.github.suzanacavalcante.desafio.cliente.dto.ClienteResponse;
+import io.github.suzanacavalcante.desafio.contato.Contato;
 import io.github.suzanacavalcante.desafio.contato.dto.ContatoRequest;
 import io.github.suzanacavalcante.desafio.contato.dto.ContatoResponse;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -180,5 +182,96 @@ class ClienteControllerTest {
                 .andExpect(status().isBadRequest());
 
         verifyNoInteractions(service);
+    }
+
+    // ---- 404 e formato do erro ----
+
+    @Test
+    void contatosDeClienteInexistenteRetorna404ComProblemDetail() throws Exception {
+        when(service.contatosDoCliente(99L)).thenThrow(new ClienteNaoEncontradoException(99L));
+
+        mockMvc.perform(get("/clientes/99/contatos"))
+                .andExpect(status().isNotFound())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.detail").value("Cliente 99 não encontrado"));
+    }
+
+    @Test
+    void jsonMalformadoTemOFormatoDeErroPadrao() throws Exception {
+        mockMvc.perform(post("/clientes").contentType(MediaType.APPLICATION_JSON).content("{\"nome\":"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(400));
+    }
+
+    // ---- uma regra de validação por teste (issue #10): nome ----
+
+    @Test
+    void nomeComExatamenteOLimiteEAceito() throws Exception {
+        when(service.criar(any())).thenReturn(new ClienteResponse(1L, "n", List.of()));
+
+        mockMvc.perform(post("/clientes").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"nome\":\"" + "a".repeat(Cliente.NOME_MAX) + "\"}"))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    void nomeAcimaDoLimiteRetorna400ComOCampoNoErro() throws Exception {
+        mockMvc.perform(post("/clientes").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"nome\":\"" + "a".repeat(Cliente.NOME_MAX + 1) + "\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erros.nome").isNotEmpty());
+
+        verifyNoInteractions(service);
+    }
+
+    // ---- contatos aninhados: cada regra de ContatoRequest, com o caminho do campo no erro ----
+
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', value = {
+            "{\"email\":\"a@x.com\"} | contatos[0].telefone",
+            "{\"telefone\":\"\",\"email\":\"a@x.com\"} | contatos[0].telefone",
+            "{\"telefone\":\"   \",\"email\":\"a@x.com\"} | contatos[0].telefone",
+            "{\"telefone\":\"1\"} | contatos[0].email",
+            "{\"telefone\":\"1\",\"email\":\"\"} | contatos[0].email",
+            "{\"telefone\":\"1\",\"email\":\"nao-e-email\"} | contatos[0].email"})
+    void contatoInvalidoRetorna400ApontandoOCampoAninhado(String contato, String campo) throws Exception {
+        mockMvc.perform(post("/clientes").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"nome\":\"Ana\",\"contatos\":[" + contato.trim() + "]}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erros['" + campo.trim() + "']").isNotEmpty());
+
+        verifyNoInteractions(service);
+    }
+
+    @Test
+    void telefoneEEmailAcimaDoLimiteDoContatoRetornam400() throws Exception {
+        String telefoneLongo = "{\"telefone\":\"" + "1".repeat(Contato.TELEFONE_MAX + 1) + "\",\"email\":\"a@x.com\"}";
+        String emailLongo = "{\"telefone\":\"1\",\"email\":\"" + emailComTamanho(Contato.EMAIL_MAX + 1) + "\"}";
+
+        for (String contato : new String[] {telefoneLongo, emailLongo}) {
+            mockMvc.perform(post("/clientes").contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"nome\":\"Ana\",\"contatos\":[" + contato + "]}"))
+                    .andExpect(status().isBadRequest());
+        }
+        verifyNoInteractions(service);
+    }
+
+    @Test
+    void listaComExatamenteOLimiteDeContatosEAceita() throws Exception {
+        when(service.criar(any())).thenReturn(new ClienteResponse(1L, "Ana", List.of()));
+        String contatos = String.join(",", Collections.nCopies(ClienteRequest.CONTATOS_MAX,
+                "{\"telefone\":\"1\",\"email\":\"a@x.com\"}"));
+
+        mockMvc.perform(post("/clientes").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"nome\":\"Ana\",\"contatos\":[" + contatos + "]}"))
+                .andExpect(status().isCreated());
+    }
+
+    /** E-mail de formato válido (parte local até 64 caracteres, rótulos até 63) com exatamente {@code tamanho}. */
+    private static String emailComTamanho(int tamanho) {
+        String prefixo = "a".repeat(60) + "@" + ("b".repeat(60) + ".").repeat(3);
+        return prefixo + "c".repeat(tamanho - prefixo.length());
     }
 }
