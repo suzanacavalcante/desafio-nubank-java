@@ -3,9 +3,9 @@
 API REST de **clientes e contatos** (1 cliente → N contatos), desafio técnico backend.
 Os diagramas usam [Mermaid](https://mermaid.js.org/) (sintaxe C4), então renderizam direto no GitHub (no VS Code, com a extensão Markdown Preview Mermaid Support).
 
-> **Estado documentado:** branch `main` após o merge do PR #30 (endpoints #6–#9 prontos).
+> **Estado documentado:** branch `main` com a validação (#10) e o tratamento global de erros (#11) implementados.
 > Itens planejados e **ainda não implementados** aparecem marcados como *(planejado)* e em tracejado:
-> Bean Validation (#10), tratamento global de erros (#11), Flyway (#16), Swagger (#15), Dockerfile (#17), CI (#18).
+> Flyway (#16), Swagger (#15), Dockerfile (#17), CI (#18).
 
 ---
 
@@ -97,7 +97,8 @@ C4Component
         }
 
         Component(dto, "DTOs (records)", "Java records", "ClienteRequest/Response, ContatoRequest, NovoContatoRequest, ContatoResponse")
-        Component(cfg, "config", "pacote", "Reservado. Tratamento global de erros em ProblemDetail (planejado, #11)")
+        Component(cfg, "config", "pacote", "ApiExceptionHandler: erros do MVC em ProblemDetail (RFC 7807): 400 com mapa campo→mensagem, 404, 500 genérico")
+        Component(val, "validacao", "pacote", "Restrições de Bean Validation reutilizáveis (@SemCaracteresInvalidos); sem dependências do projeto")
     }
 
     Rel(consumidor, cCtrl, "HTTP/JSON")
@@ -131,7 +132,7 @@ C4Component
 
 | Componente | Papel | Observações relevantes |
 |---|---|---|
-| `ClienteController` | Camada web de `/clientes`. | `POST` devolve **201**. Ainda sem `@Valid`. |
+| `ClienteController` | Camada web de `/clientes`. | `POST` devolve **201**. `@Valid` no corpo; erros viram `ProblemDetail` (ver `config`). |
 | `ContatoController` | Camada web de `/contatos`. | `POST` devolve **201**; `clienteId` vem no corpo. |
 | `ClienteService` | Casos de uso de cliente. | `criar` é `@Transactional`; `listar` e `contatosDoCliente` são `readOnly`. Cliente inexistente → `ClienteNaoEncontradoException`. |
 | `ContatoService` | Caso de uso de criação de contato. | Busca o cliente com `findById`, associa e salva, mapeia dentro da transação. |
@@ -140,7 +141,7 @@ C4Component
 | `ClienteMapper` / `ContatoMapper` | Conversão DTO ↔ entidade. | `ContatoMapper.toEntity` **não** associa o cliente; quem associa é o service ou `Cliente.adicionarContato`. |
 | `Cliente` | Raiz do agregado. | `getContatos()` é somente leitura; alterações via `adicionarContato` (idempotente; rejeita contato de outro cliente) e `removerContato`. Limite de `nome`: 150. |
 | `Contato` | Entidade filha. | Limites: `telefone` 30, `email` 254. FK `cliente_id` NOT NULL. |
-| DTOs | Contrato da API. | `record`s, hoje sem validação. |
+| DTOs | Contrato da API. | `record`s com Bean Validation (restrições próprias em `validacao`). |
 
 ---
 
@@ -191,12 +192,12 @@ A FK gerada pelo Hibernate **não** tem `ON DELETE CASCADE` nem índice em `cont
 
 | Método | Rota | Corpo | Sucesso | Erros |
 |---|---|---|---|---|
-| POST | `/clientes` | `{ nome, contatos?: [{ telefone, email }] }` | 201 `ClienteResponse` | 400 *(hoje 500; planejado, #10)* |
-| POST | `/contatos` | `{ clienteId, telefone, email }` | 201 `ContatoResponse` | 400 *(hoje 500; planejado, #10)*, 404 *(hoje 500; planejado, #11)* |
+| POST | `/clientes` | `{ nome, contatos?: [{ telefone, email }] }` | 201 `ClienteResponse` | 400 |
+| POST | `/contatos` | `{ clienteId, telefone, email }` | 201 `ContatoResponse` | 400, 404 |
 | GET | `/clientes` | – | 200 lista de `ClienteResponse` com contatos | – |
-| GET | `/clientes/{id}/contatos` | – | 200 lista de `ContatoResponse` | 404 *(hoje 500; planejado, #11)* |
+| GET | `/clientes/{id}/contatos` | – | 200 lista de `ContatoResponse` | 400 (`{id}` inválido), 404 |
 
-> Hoje `ClienteNaoEncontradoException` é lançada, mas não há `@RestControllerAdvice`: cliente inexistente responde **500** (não 404) até a #11. Do mesmo modo, entrada inválida (nome nulo, e-mail nulo, `clienteId` nulo) hoje também responde 500 até a #10. Os testes `clienteInexistenteRetorna404` (tag `bug-conhecido`) fixam o contrato desejado.
+> Todo erro sai como `ProblemDetail` (`application/problem+json`): validação → 400 com `erros` (campo → mensagem, em português, sem ecoar o valor rejeitado); JSON malformado ou `{id}` de tipo errado → 400; `ClienteNaoEncontradoException` → 404; qualquer outra exceção → 500 genérico (stack trace só no log). `GET /clientes` não tem erros esperados do cliente.
 
 ### Fluxo: criar contato (`POST /contatos`)
 
@@ -273,8 +274,6 @@ sequenceDiagram
 
 | Issue | Mudança | Impacto no C4 |
 |---|---|---|
-| #10 | Bean Validation | DTOs e controllers com `@Valid`; 400 com mapa campo→mensagem |
-| #11 | Tratamento global de erros | Novo componente `ApiExceptionHandler` em `config`, respostas `ProblemDetail` (RFC 7807) |
 | #14 | Testcontainers | Novo contêiner de teste (Postgres efêmero) |
 | #15 | Swagger/OpenAPI | Novo componente de documentação da API (springdoc compatível com Boot 4) |
 | #16 | Flyway | Migrações versionadas substituem `ddl-auto`; `ON DELETE CASCADE` e índice em `contatos.cliente_id` |
