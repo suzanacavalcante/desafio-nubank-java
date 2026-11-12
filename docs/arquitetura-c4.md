@@ -132,7 +132,7 @@ C4Component
 
 | Componente | Papel | Observações relevantes |
 |---|---|---|
-| `ClienteController` | Camada web de `/clientes`. | `POST` devolve **201**. Ainda sem `@Valid`. |
+| `ClienteController` | Camada web de `/clientes`. | `POST` devolve **201**. `@Valid` no corpo; erros viram `ProblemDetail` (ver `config`). |
 | `ContatoController` | Camada web de `/contatos`. | `POST` devolve **201**; `clienteId` vem no corpo. |
 | `ClienteService` | Casos de uso de cliente. | `criar` é `@Transactional`; `listar` e `contatosDoCliente` são `readOnly`. Cliente inexistente → `ClienteNaoEncontradoException`. |
 | `ContatoService` | Caso de uso de criação de contato. | Busca o cliente com `findById`, associa e salva, mapeia dentro da transação. |
@@ -141,7 +141,7 @@ C4Component
 | `ClienteMapper` / `ContatoMapper` | Conversão DTO ↔ entidade. | `ContatoMapper.toEntity` **não** associa o cliente; quem associa é o service ou `Cliente.adicionarContato`. |
 | `Cliente` | Raiz do agregado. | `getContatos()` é somente leitura; alterações via `adicionarContato` (idempotente; rejeita contato de outro cliente) e `removerContato`. Limite de `nome`: 150. |
 | `Contato` | Entidade filha. | Limites: `telefone` 30, `email` 254. FK `cliente_id` NOT NULL. |
-| DTOs | Contrato da API. | `record`s, hoje sem validação. |
+| DTOs | Contrato da API. | `record`s com Bean Validation (restrições próprias em `validacao`). |
 
 ---
 

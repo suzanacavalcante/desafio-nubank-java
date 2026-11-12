@@ -16,6 +16,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.exc.MismatchedInputException;
 
 import java.util.Map;
 import java.util.SortedSet;
@@ -85,8 +87,12 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     @Override
     protected ResponseEntity<Object> handleHttpMessageNotReadable(
             HttpMessageNotReadableException ex, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
-        ProblemDetail problema = ProblemDetail.forStatusAndDetail(
-                status, "Corpo da requisição ausente, malformado ou com tipos incorretos.");
+        String detalhe = "Corpo da requisição ausente ou malformado.";
+        if (ex.getCause() instanceof MismatchedInputException tipoErrado && !tipoErrado.getPath().isEmpty()) {
+            // diz só o caminho do campo (nunca o valor), para o cliente saber o que corrigir
+            detalhe = "Tipo incorreto no campo '" + caminho(tipoErrado) + "'.";
+        }
+        ProblemDetail problema = ProblemDetail.forStatusAndDetail(status, detalhe);
         problema.setTitle("Corpo inválido");
         return handleExceptionInternal(ex, problema, headers, status, request);
     }
@@ -99,5 +105,18 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
                 status, "Valor inválido para o parâmetro '" + nome + "'.");
         problema.setTitle("Parâmetro inválido");
         return handleExceptionInternal(ex, problema, headers, status, request);
+    }
+
+    /** Caminho do campo no JSON, por exemplo {@code contatos[0].telefone}. */
+    private static String caminho(MismatchedInputException ex) {
+        StringBuilder caminho = new StringBuilder();
+        for (JacksonException.Reference ref : ex.getPath()) {
+            if (ref.getPropertyName() != null) {
+                caminho.append(caminho.isEmpty() ? "" : ".").append(ref.getPropertyName());
+            } else {
+                caminho.append('[').append(ref.getIndex()).append(']');
+            }
+        }
+        return caminho.toString();
     }
 }

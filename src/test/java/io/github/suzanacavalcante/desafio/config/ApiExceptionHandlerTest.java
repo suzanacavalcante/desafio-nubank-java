@@ -11,12 +11,13 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.test.web.servlet.ResultMatcher;
 
 import java.nio.charset.StandardCharsets;
 
 import static org.hamcrest.Matchers.containsString;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.hamcrest.Matchers.not;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -48,7 +49,7 @@ class ApiExceptionHandlerTest {
                 .content(json.getBytes(StandardCharsets.UTF_8)));
     }
 
-    private static org.springframework.test.web.servlet.ResultMatcher problema(int status) {
+    private static ResultMatcher problema(int status) {
         return result -> {
             status().is(status).match(result);
             content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON).match(result);
@@ -105,8 +106,18 @@ class ApiExceptionHandlerTest {
     }
 
     @Test
-    void tipoErradoNoCorpoRetorna400() throws Exception {
-        postarCliente("{\"nome\":{\"a\":1}}").andExpect(problema(400));
+    void tipoErradoNoCorpoRetorna400DizendoSoOCampo() throws Exception {
+        postarCliente("{\"nome\":{\"a\":1}}")
+                .andExpect(problema(400))
+                .andExpect(jsonPath("$.detail").value("Tipo incorreto no campo 'nome'."));
+    }
+
+    @Test
+    void tipoErradoEmContatoAninhadoDizOCaminhoSemOValor() throws Exception {
+        postarCliente("{\"nome\":\"Ana\",\"contatos\":[{\"telefone\":{\"x\":\"segredo-do-cliente\"},\"email\":\"a@x.com\"}]}")
+                .andExpect(problema(400))
+                .andExpect(jsonPath("$.detail").value("Tipo incorreto no campo 'contatos[0].telefone'."))
+                .andExpect(content().string(not(containsString("segredo-do-cliente"))));
     }
 
     @Test

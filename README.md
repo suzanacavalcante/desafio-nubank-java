@@ -33,12 +33,12 @@ curl http://localhost:8080/clientes/1/contatos
 
 ### Erros
 
-Todo erro tratado pelo Spring MVC é um `ProblemDetail` (`application/problem+json`, RFC 7807), sem stack trace e sem ecoar o valor rejeitado:
+Todo erro tratado pelo Spring MVC é um `ProblemDetail` (`application/problem+json`, RFC 7807), sem stack trace e sem repetir o valor dos campos rejeitados (o `instance` traz só o caminho da requisição, e as mensagens do próprio Spring para 405 e 415 citam o método e o `Content-Type` recebidos):
 
 | Situação | Status |
 |---|---|
 | Campo inválido (`@Valid`) | **400**, com `erros` (campo → mensagem, em português) |
-| JSON malformado ou de tipo errado; `{id}` que não é número | **400** |
+| JSON malformado; tipo errado em um campo (a resposta diz o campo, não o valor); `{id}` que não é número | **400** |
 | Cliente inexistente (`POST /contatos`, `GET /clientes/{id}/contatos`) | **404** |
 | Método ou rota inexistente | **405** / **404** |
 | Erro inesperado | **500** genérico (o detalhe fica só no log) |
