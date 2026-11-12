@@ -24,6 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
@@ -96,6 +97,30 @@ class ClienteServiceTest {
         Cliente salvo = captor.getValue();
         assertEquals(1, salvo.getContatos().size());
         assertEquals(salvo, salvo.getContatos().get(0).getCliente());
+    }
+
+    /**
+     * Os contatos viajam pelo cascade do cliente, na mesma operação de {@code save}. Se o service passasse a
+     * gravá-los por {@code ContatoRepository}, cliente e contatos deixariam de ser atômicos (a falha de um
+     * contato deixaria o cliente gravado).
+     */
+    @Test
+    void criarComContatosNaoGravaContatosPeloContatoRepository() {
+        salvarAtribuindoIds();
+
+        service.criar(new ClienteRequest("Ana", List.of(new ContatoRequest("48123", "a@x.com"))));
+
+        verifyNoInteractions(contatoRepository);
+    }
+
+    @Test
+    void criarMantemContatosIguaisSemDeduplicar() {
+        salvarAtribuindoIds();
+        var igual = new ContatoRequest("48123", "a@x.com");
+
+        ClienteResponse response = service.criar(new ClienteRequest("Ana", List.of(igual, igual)));
+
+        assertEquals(2, response.contatos().size());
     }
 
     private static Cliente clienteComContatos(long id, String nome, long... idsDosContatos) {

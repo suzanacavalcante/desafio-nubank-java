@@ -11,6 +11,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.Optional;
@@ -21,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -88,5 +90,26 @@ class ContatoServiceTest {
         assertEquals(99L, ex.getClienteId());
         assertEquals("Cliente 99 não encontrado", ex.getMessage());
         verify(contatoRepository, never()).save(any());
+    }
+
+    @Test
+    void propagaAFalhaAoSalvarSemEngolirOErro() {
+        when(clienteRepository.findById(7L)).thenReturn(Optional.of(clienteComId(7L)));
+        when(contatoRepository.save(any(Contato.class))).thenThrow(new DataIntegrityViolationException("falha"));
+
+        assertThrows(DataIntegrityViolationException.class,
+                () -> service.criar(new NovoContatoRequest(7L, "48123", "a@x.com")));
+    }
+
+    /** O cliente é buscado só por {@code findById}: nenhum método que carregue os contatos dele (LAZY). */
+    @Test
+    void buscaOClienteApenasPorFindById() {
+        when(clienteRepository.findById(7L)).thenReturn(Optional.of(clienteComId(7L)));
+        when(contatoRepository.save(any(Contato.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.criar(new NovoContatoRequest(7L, "48123", "a@x.com"));
+
+        verify(clienteRepository).findById(7L);
+        verifyNoMoreInteractions(clienteRepository);
     }
 }
