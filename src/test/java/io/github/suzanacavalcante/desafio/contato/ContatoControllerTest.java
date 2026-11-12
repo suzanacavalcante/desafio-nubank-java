@@ -1,5 +1,6 @@
 package io.github.suzanacavalcante.desafio.contato;
 
+import io.github.suzanacavalcante.desafio.cliente.ClienteNaoEncontradoException;
 import io.github.suzanacavalcante.desafio.contato.dto.ContatoResponse;
 import io.github.suzanacavalcante.desafio.contato.dto.NovoContatoRequest;
 import org.junit.jupiter.api.Test;
@@ -18,6 +19,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -82,9 +84,9 @@ class ContatoControllerTest {
 
     @Test
     void telefoneEEmailAcimaDoLimiteRetornam400() throws Exception {
-        String telefoneLongo = "{\"clienteId\":7,\"telefone\":\"" + "1".repeat(Contato.TELEFONE_MAX + 1)
+        String telefoneLongo = "{\"clienteId\":7,\"telefone\":\"" + "1".repeat(31)
                 + "\",\"email\":\"a@x.com\"}";
-        String emailLongo = "{\"clienteId\":7,\"telefone\":\"1\",\"email\":\"" + emailComTamanho(Contato.EMAIL_MAX + 1)
+        String emailLongo = "{\"clienteId\":7,\"telefone\":\"1\",\"email\":\"" + emailComTamanho(255)
                 + "\"}";
 
         for (String json : new String[] {telefoneLongo, emailLongo}) {
@@ -97,8 +99,8 @@ class ContatoControllerTest {
     @Test
     void valoresNoLimiteExatoSaoAceitos() throws Exception {
         when(service.criar(any())).thenReturn(new ContatoResponse(1L, "t", "e", 7L));
-        String json = "{\"clienteId\":7,\"telefone\":\"" + "1".repeat(Contato.TELEFONE_MAX)
-                + "\",\"email\":\"" + emailComTamanho(Contato.EMAIL_MAX) + "\"}";
+        String json = "{\"clienteId\":7,\"telefone\":\"" + "1".repeat(30)
+                + "\",\"email\":\"" + emailComTamanho(254) + "\"}";
 
         mockMvc.perform(post("/contatos").contentType(MediaType.APPLICATION_JSON).content(json))
                 .andExpect(status().isCreated());
@@ -127,5 +129,52 @@ class ContatoControllerTest {
         mockMvc.perform(post("/contatos").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"clienteId\":7,\"telefone\":\"\\uD83D\\uDE00\",\"email\":\"a@x.com\"}"))
                 .andExpect(status().isCreated());
+    }
+
+    // ---- 404 e formato do erro ----
+
+    @Test
+    void clienteInexistenteRetorna404ComProblemDetail() throws Exception {
+        when(service.criar(any())).thenThrow(new ClienteNaoEncontradoException(99L));
+
+        mockMvc.perform(post("/contatos").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"clienteId\":99,\"telefone\":\"48123\",\"email\":\"a@x.com\"}"))
+                .andExpect(status().isNotFound())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.title").value("Cliente não encontrado"))
+                .andExpect(jsonPath("$.detail").value("Cliente 99 não encontrado"));
+    }
+
+    /** Cada campo inválido aparece em {@code erros}, com a regra de {@code NovoContatoRequest} que o barrou. */
+    @Test
+    void validacaoRetorna400ComUmErroPorCampo() throws Exception {
+        mockMvc.perform(post("/contatos").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"telefone\":\"\",\"email\":\"lixo\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.title").value("Dados inválidos"))
+                .andExpect(jsonPath("$.erros.clienteId").value("não deve ser nulo"))
+                .andExpect(jsonPath("$.erros.telefone").value("não deve estar em branco"))
+                .andExpect(jsonPath("$.erros.email").isNotEmpty());
+
+        verifyNoInteractions(service);
+    }
+
+    @Test
+    void jsonMalformadoTemOFormatoDeErroPadrao() throws Exception {
+        mockMvc.perform(post("/contatos").contentType(MediaType.APPLICATION_JSON).content("{\"clienteId\":"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
+    }
+
+    @Test
+    void clienteIdDeTipoErradoRetorna400DizendoOCampo() throws Exception {
+        mockMvc.perform(post("/contatos").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"clienteId\":\"abc\",\"telefone\":\"1\",\"email\":\"a@x.com\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("Tipo incorreto no campo 'clienteId'."));
+
+        verifyNoInteractions(service);
     }
 }

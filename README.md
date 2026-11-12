@@ -50,6 +50,18 @@ Todo erro tratado pelo Spring MVC é um `ProblemDetail` (`application/problem+js
 
 Ficam fora do formato os erros que acontecem **antes** do MVC ou fora dele: URL com percent-encoding inválido (`/clientes/%zz`) e cabeçalhos gigantes (página de erro do Tomcat), `TRACE` e `GET /error` direto (JSON padrão do Spring Boot). As mensagens do próprio Spring MVC (rota inexistente, método não suportado) saem em inglês.
 
+### Limites da validação
+
+| Campo | Regra |
+|---|---|
+| `nome` | obrigatório, até **150** caracteres |
+| `telefone` | obrigatório, até **30** caracteres |
+| `email` | obrigatório, formato de e-mail válido, até **254** caracteres |
+| `contatos` (em `POST /clientes`) | opcional, no máximo **50** contatos, nenhum nulo |
+| `clienteId` (em `POST /contatos`) | obrigatório |
+
+`nome` e `telefone` também não aceitam o caractere NUL nem surrogate UTF-16 solto. Os tamanhos contam unidades UTF-16 (um emoji conta 2).
+
 ### Limitações atuais
 
 Ainda **não** implementados (planejados nas issues):
