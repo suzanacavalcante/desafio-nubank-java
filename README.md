@@ -33,7 +33,7 @@ curl http://localhost:8080/clientes/1/contatos
 
 ### Erros
 
-Toda resposta de erro é um `ProblemDetail` (`application/problem+json`, RFC 7807), sem stack trace e sem ecoar o valor rejeitado:
+Todo erro tratado pelo Spring MVC é um `ProblemDetail` (`application/problem+json`, RFC 7807), sem stack trace e sem ecoar o valor rejeitado:
 
 | Situação | Status |
 |---|---|
@@ -47,6 +47,8 @@ Toda resposta de erro é um `ProblemDetail` (`application/problem+json`, RFC 780
 {"title":"Dados inválidos","status":400,"detail":"Há campos inválidos na requisição.",
  "instance":"/clientes","erros":{"nome":"não deve estar em branco","contatos[0].email":"deve ser um endereço de e-mail bem formado"}}
 ```
+
+Ficam fora do formato os erros que acontecem **antes** do MVC ou fora dele: URL com percent-encoding inválido (`/clientes/%zz`) e cabeçalhos gigantes (página de erro do Tomcat), `TRACE` e `GET /error` direto (JSON padrão do Spring Boot). As mensagens do próprio Spring MVC (rota inexistente, método não suportado) saem em inglês.
 
 ### Limitações atuais
 

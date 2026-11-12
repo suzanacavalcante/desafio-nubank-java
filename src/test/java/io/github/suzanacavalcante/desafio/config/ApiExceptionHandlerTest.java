@@ -152,4 +152,18 @@ class ApiExceptionHandlerTest {
         assertEquals("never", environment.getProperty("server.error.include-binding-errors"));
         assertEquals("false", environment.getProperty("server.error.include-exception"));
     }
+
+    /**
+     * Um campo com vários motivos (151 espaços viola {@code @NotBlank} e {@code @Size}) junta as mensagens
+     * em ordem fixa. O Hibernate Validator não garante a ordem das violações, então repete a chamada.
+     */
+    @Test
+    void variosMotivosNoMesmoCampoSaemJuntosEmOrdemFixa() throws Exception {
+        for (int i = 0; i < 30; i++) {
+            postarCliente("{\"nome\":\"" + " ".repeat(151) + "\"}")
+                    .andExpect(problema(400))
+                    .andExpect(jsonPath("$.erros.nome")
+                            .value("não deve estar em branco; tamanho deve ser entre 0 e 150"));
+        }
+    }
 }

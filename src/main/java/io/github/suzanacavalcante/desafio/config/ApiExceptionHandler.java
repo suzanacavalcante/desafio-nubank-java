@@ -18,11 +18,16 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 import java.util.Map;
+import java.util.SortedSet;
 import java.util.TreeMap;
+import java.util.TreeSet;
 
 /**
  * Tratamento global de erros: toda resposta de erro da API é um {@link ProblemDetail}
  * ({@code application/problem+json}, RFC 7807).
+ * <p>
+ * Cobre os erros que acontecem <b>dentro do Spring MVC</b>. Erros anteriores a ele (URL com
+ * percent-encoding inválido, cabeçalho gigante) e o {@code /error} do container não passam por aqui.
  * <p>
  * Estende {@link ResponseEntityExceptionHandler}, que já converte para esse mesmo formato os erros do
  * próprio Spring MVC (método HTTP não suportado, tipo de conteúdo, rota inexistente etc.); aqui só se
@@ -59,13 +64,17 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     @Override
     protected ResponseEntity<Object> handleMethodArgumentNotValid(
             MethodArgumentNotValidException ex, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
-        Map<String, String> erros = new TreeMap<>();
+        // O Hibernate Validator não garante a ordem das violações: ordenar as mensagens de cada campo
+        // mantém a resposta idêntica para a mesma entrada.
+        Map<String, SortedSet<String>> porCampo = new TreeMap<>();
         for (FieldError erro : ex.getBindingResult().getFieldErrors()) {
-            erros.merge(erro.getField(), String.valueOf(erro.getDefaultMessage()), (a, b) -> a + "; " + b);
+            porCampo.computeIfAbsent(erro.getField(), k -> new TreeSet<>()).add(String.valueOf(erro.getDefaultMessage()));
         }
-        ex.getBindingResult().getGlobalErrors()
-                .forEach(erro -> erros.merge(erro.getObjectName(), String.valueOf(erro.getDefaultMessage()),
-                        (a, b) -> a + "; " + b));
+        ex.getBindingResult().getGlobalErrors().forEach(erro ->
+                porCampo.computeIfAbsent(erro.getObjectName(), k -> new TreeSet<>())
+                        .add(String.valueOf(erro.getDefaultMessage())));
+        Map<String, String> erros = new TreeMap<>();
+        porCampo.forEach((campo, mensagens) -> erros.put(campo, String.join("; ", mensagens)));
 
         ProblemDetail problema = ProblemDetail.forStatusAndDetail(status, "Há campos inválidos na requisição.");
         problema.setTitle("Dados inválidos");

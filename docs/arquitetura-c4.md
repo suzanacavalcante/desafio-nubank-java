@@ -97,7 +97,7 @@ C4Component
         }
 
         Component(dto, "DTOs (records)", "Java records", "ClienteRequest/Response, ContatoRequest, NovoContatoRequest, ContatoResponse")
-        Component(cfg, "config", "pacote", "ApiExceptionHandler: toda resposta de erro é um ProblemDetail (RFC 7807): 400 com mapa campo→mensagem, 404, 500 genérico")
+        Component(cfg, "config", "pacote", "ApiExceptionHandler: erros do MVC em ProblemDetail (RFC 7807): 400 com mapa campo→mensagem, 404, 500 genérico")
         Component(val, "validacao", "pacote", "Restrições de Bean Validation reutilizáveis (@SemCaracteresInvalidos); sem dependências do projeto")
     }
 
