@@ -12,7 +12,9 @@ import java.lang.annotation.Target;
 /**
  * Faz o teste usar o PostgreSQL descartável ({@link PostgresDeTeste}) em vez do banco do desenvolvedor.
  * <ul>
- *   <li>cria o schema no container ({@code ddl-auto=update}; a produção usará Flyway, issue #16);</li>
+ *   <li>o schema do container nasce das migrations do Flyway (as mesmas da produção) e o Hibernate apenas
+ *       o valida ({@code ddl-auto=validate}, herdado do {@code application.yml}): se uma entidade e a
+ *       migration divergirem, o contexto nem sobe;</li>
  *   <li>define usuário e senha de mentira: o {@code application.yml} exige {@code DB_USER} e
  *       {@code DB_PASSWORD} sem valor padrão, e o container já traz as credenciais reais pela conexão
  *       de serviço, que prevalece sobre estas.</li>
@@ -23,7 +25,6 @@ import java.lang.annotation.Target;
 @Target(ElementType.TYPE)
 @Import(PostgresDeTeste.class)
 @TestPropertySource(properties = {
-        "spring.jpa.hibernate.ddl-auto=update",
         "spring.datasource.username=teste",
         "spring.datasource.password=teste"})
 public @interface UsaPostgresDeTeste {

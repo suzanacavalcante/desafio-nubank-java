@@ -107,7 +107,13 @@ No Windows (PowerShell), use `Copy-Item .env.example .env` e `.\mvnw.cmd spring-
 
 - No `.env`, escreva os valores **sem aspas**, sem `export` e sem comentário na mesma linha (o Compose e o Spring leem o arquivo de formas diferentes). Detalhes no próprio `.env.example`.
 - O banco só é publicado em `127.0.0.1`, não fica acessível pela rede.
-- O perfil **`dev`** (`ddl-auto: update`, log do SQL) só é ativado pelo `spring-boot:run`. Em uma IDE, defina `SPRING_PROFILES_ACTIVE=dev`. O jar empacotado e os testes **não** usam o perfil `dev`.
+- O perfil **`dev`** (log do SQL) só é ativado pelo `spring-boot:run`. Em uma IDE, defina `SPRING_PROFILES_ACTIVE=dev`. O jar empacotado e os testes **não** usam o perfil `dev`.
+
+### Banco de dados e migrations
+
+O schema é criado pelo **Flyway** na subida da aplicação (`src/main/resources/db/migration`, arquivos `V<n>__descricao.sql`); o Hibernate só **valida** (`ddl-auto: validate`) e a aplicação não sobe se uma entidade divergir das migrations. Para mudar o schema, crie uma nova migration (`V2__...sql`); **nunca edite uma já aplicada** (o Flyway acusa o checksum alterado).
+
+- **Banco já existente criado antes do Flyway** (pelo `ddl-auto: update` antigo): a `V1` falha porque as tabelas já existem. Recrie o banco de desenvolvimento: `docker compose down -v && docker compose up -d` (apaga os dados) e suba a aplicação de novo.
 
 ## Testes
 

@@ -55,13 +55,13 @@ C4Container
 | Contêiner | Tecnologia | Responsabilidade |
 |---|---|---|
 | Aplicação Spring Boot | Java 21, Spring Boot 4.1.2, Maven Wrapper, Lombok | API REST, validação, erros em `ProblemDetail`, transações, mapeamento DTO ↔ entidade, persistência com JPA e documentação interativa (Swagger UI). Empacotada como jar (`desafio-nubank-java-0.0.1-SNAPSHOT.jar`). |
-| Banco de dados | PostgreSQL 16, imagem oficial, volume `pgdata`, *healthcheck* `pg_isready` | Guarda os dados. Schema gerado pelo Hibernate (`ddl-auto: update`) só no perfil `dev`; no jar é `none`, e os testes de integração usam `update` via `@UsaPostgresDeTeste`, em um PostgreSQL descartável do Testcontainers. *(planejado: Flyway, #16, substitui o `update`)* |
+| Banco de dados | PostgreSQL 16, imagem oficial, volume `pgdata`, *healthcheck* `pg_isready` | Guarda os dados. O schema é criado pelas migrations do Flyway (`src/main/resources/db/migration`, executadas na subida da aplicação); o Hibernate só o valida (`ddl-auto: validate`). Os testes de integração aplicam as mesmas migrations em um PostgreSQL descartável do Testcontainers. |
 
 ### Configuração e ambientes
 
 - Credenciais vêm do `.env` (não versionado; modelo em `.env.example`) ou de variáveis de ambiente: `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`. `DB_USER` e `DB_PASSWORD` não têm valor padrão na aplicação.
 - O mesmo `.env` alimenta o Docker Compose e o Spring (`spring.config.import: optional:file:.env[.properties]`).
-- Perfil `dev` (ativado por `./mvnw spring-boot:run`): `ddl-auto: update`, SQL formatado e log do Hibernate em `debug`.
+- Perfil `dev` (ativado por `./mvnw spring-boot:run`): SQL formatado e log do Hibernate em `debug`.
 - `spring.jpa.open-in-view: false`: todo mapeamento para DTO acontece dentro da transação do service.
 
 ---
@@ -267,7 +267,7 @@ sequenceDiagram
 | **DTOs em `record`**, sem expor entidades | Evita `LazyInitializationException` na serialização e recursão JSON cliente↔contato. |
 | `open-in-view: false` + mapeamento no service | Acesso preguiçoso só dentro da transação; falha cedo se alguém mapear fora. |
 | `JOIN FETCH` na listagem | Uma consulta em vez de N+1 (ver a ressalva: sem paginação, o custo cresce com o volume). |
-| `ddl-auto: update` só no perfil `dev` e nos testes | Provisório até o Flyway (#16); o jar usa `none`. |
+| Flyway + `ddl-auto: validate` | O schema tem uma única origem versionada (as migrations, as mesmas em dev, testes e produção); o Hibernate falha na subida se as entidades divergirem dela. FK com `ON DELETE CASCADE` e índice em `contatos.cliente_id`. |
 | Erros em `ProblemDetail` (RFC 7807) | Formato padrão e único; sem stack trace e sem ecoar o valor rejeitado. |
 | springdoc-openapi 3.2.0 | Série compatível com o Spring Boot 4.1; documentação por anotações nos controllers e DTOs. |
 | Testes com Testcontainers | Testes independentes do banco local, do Compose e do `.env`. |
@@ -283,7 +283,6 @@ sequenceDiagram
 
 | Issue | Mudança | Impacto no C4 |
 |---|---|---|
-| #16 | Flyway | Migrações versionadas substituem `ddl-auto`; `ON DELETE CASCADE` e índice em `contatos.cliente_id` |
 | #17 | Dockerfile + Compose | Aplicação passa a ser contêiner junto com o banco |
 | #18 | GitHub Actions | Novo sistema externo (CI) no nível de contexto |
 | #29 | Paginação em `GET /clientes` | Contrato da listagem muda (parâmetros de página); sem alterar a estrutura de componentes |

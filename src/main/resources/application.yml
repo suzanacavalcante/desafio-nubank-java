@@ -17,7 +17,8 @@ spring:
   jpa:
     open-in-view: false
     hibernate:
-      ddl-auto: none
+      # O schema é criado pelo Flyway (db/migration); o Hibernate só confere se as entidades batem com ele
+      ddl-auto: validate
 
 server:
   error:
