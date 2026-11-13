@@ -3,9 +3,9 @@
 API REST de **clientes e contatos** (1 cliente → N contatos), desafio técnico backend.
 Os diagramas usam [Mermaid](https://mermaid.js.org/) (sintaxe C4), então renderizam direto no GitHub (no VS Code, com a extensão Markdown Preview Mermaid Support).
 
-> **Estado documentado:** branch `main` com validação (#10), tratamento global de erros (#11), testes com Testcontainers (#14) e Swagger/OpenAPI (#15) implementados.
+> **Estado documentado:** branch `main` com validação (#10), tratamento global de erros (#11), testes com Testcontainers (#14), Swagger/OpenAPI (#15) e migrations com Flyway (#16) implementados.
 > Itens **ainda não implementados** aparecem marcados como *(planejado)*:
-> Flyway (#16), Dockerfile (#17), CI (#18), paginação (#29) e resiliência a queda do banco (#34).
+> Dockerfile (#17), CI (#18), paginação (#29) e resiliência a queda do banco (#34).
 
 ---
 
@@ -192,7 +192,7 @@ erDiagram
     }
 ```
 
-A FK gerada pelo Hibernate **não** tem `ON DELETE CASCADE` nem índice em `contatos.cliente_id`; ambos estão previstos para a migração Flyway (#16).
+A FK (`fk_contatos_cliente`) tem `ON DELETE CASCADE` e há o índice `idx_contatos_cliente_id`, criados pela V1 do Flyway.
 
 ### Contrato da API
 

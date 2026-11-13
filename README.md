@@ -70,7 +70,7 @@ Ficam fora do formato os erros que acontecem **antes** do MVC ou fora dele: URL 
 
 Ainda **não** implementados (planejados nas issues):
 
-- Flyway (#16), Dockerfile (#17) e GitHub Actions (#18)
+- Dockerfile (#17) e GitHub Actions (#18)
 - Paginação em `GET /clientes` (#29)
 - Resiliência a queda do banco: timeout curto e 503 com `Retry-After` (#34)
 

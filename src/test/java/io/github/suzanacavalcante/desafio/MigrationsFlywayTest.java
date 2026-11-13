@@ -1,8 +1,6 @@
 package io.github.suzanacavalcante.desafio;
 
 import io.github.suzanacavalcante.desafio.suporte.UsaPostgresDeTeste;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -35,12 +33,6 @@ class MigrationsFlywayTest {
     @Autowired
     Environment env;
 
-    @BeforeEach
-    @AfterEach
-    void esvaziarTabelas() {
-        jdbc.execute("truncate table contatos, clientes restart identity cascade");
-    }
-
     @Test
     void hibernateApenasValidaOSchema() {
         assertEquals("validate", env.getProperty("spring.jpa.hibernate.ddl-auto"));
@@ -50,10 +42,11 @@ class MigrationsFlywayTest {
     void v1FoiAplicadaComSucesso() {
         List<Map<String, Object>> historico = jdbc.queryForList(
                 "select version, description, success from flyway_schema_history where version is not null");
-        assertEquals(1, historico.size());
-        assertEquals("1", historico.get(0).get("version"));
-        assertEquals("cria tabelas", historico.get(0).get("description"));
-        assertEquals(true, historico.get(0).get("success"));
+        assertTrue(historico.stream().allMatch(m -> Boolean.TRUE.equals(m.get("success"))),
+                "todas as migrations aplicadas com sucesso");
+        Map<String, Object> v1 = historico.stream().filter(m -> "1".equals(m.get("version"))).findFirst().orElseThrow();
+        assertEquals("cria tabelas", v1.get("description"));
+        assertEquals(true, v1.get("success"));
     }
 
     @Test
@@ -66,13 +59,12 @@ class MigrationsFlywayTest {
 
     @Test
     void apagarOClienteNoBancoApagaSeusContatos() {
-        jdbc.update("insert into clientes (nome) values ('Ana')");
-        Long id = jdbc.queryForObject("select id from clientes", Long.class);
+        Long id = jdbc.queryForObject("insert into clientes (nome) values ('Ana') returning id", Long.class);
         jdbc.update("insert into contatos (telefone, email, cliente_id) values ('1', 'a@x.com', ?)", id);
 
         jdbc.update("delete from clientes where id = ?", id);
 
-        assertEquals(0, jdbc.queryForObject("select count(*) from contatos", Integer.class));
+        assertEquals(0, jdbc.queryForObject("select count(*) from contatos where cliente_id = ?", Integer.class, id));
     }
 
     @Test
@@ -103,7 +95,7 @@ class MigrationsFlywayTest {
     void existeIndiceNaColunaDaChaveEstrangeira() {
         String definicao = jdbc.queryForObject("""
                 select indexdef from pg_indexes
-                where tablename = 'contatos' and indexname = 'idx_contatos_cliente_id'""", String.class);
+                where schemaname = current_schema() and tablename = 'contatos' and indexname = 'idx_contatos_cliente_id'""", String.class);
         assertTrue(definicao.contains("(cliente_id)"), definicao);
     }
 
@@ -117,6 +109,6 @@ class MigrationsFlywayTest {
     private int tamanho(String tabela, String coluna) {
         return jdbc.queryForObject("""
                 select character_maximum_length from information_schema.columns
-                where table_name = ? and column_name = ?""", Integer.class, tabela, coluna);
+                where table_schema = current_schema() and table_name = ? and column_name = ?""", Integer.class, tabela, coluna);
     }
 }
