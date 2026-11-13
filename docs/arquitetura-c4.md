@@ -268,13 +268,12 @@ sequenceDiagram
 
 - Pirâmide: testes unitários (entidades, mappers, services com Mockito), `@WebMvcTest` nos controllers, `@DataJpaTest` no repositório e testes de API que sobem o contexto completo (`*ApiTest`).
 - Testes de contrato ainda não atendidos ficam sob a tag `bug-conhecido` e **falham de propósito** até a issue correspondente ser feita (não tratar como regressão); a tag é excluída por padrão (`excludedGroups` no `pom.xml`); rode com `-Dgroups=bug-conhecido -DexcludedGroups=nenhum`.
-- Os testes que sobem o contexto precisam do PostgreSQL ativo (`docker compose up -d --wait`). *(planejado: Testcontainers, #14)*
+- Os testes de integração usam um PostgreSQL 16 descartável do **Testcontainers** (um container por execução, ligado por `@ServiceConnection`); precisam de Docker, mas não do Compose nem do `.env`.
 
 ## Evolução prevista
 
 | Issue | Mudança | Impacto no C4 |
 |---|---|---|
-| #14 | Testcontainers | Novo contêiner de teste (Postgres efêmero) |
 | #15 | Swagger/OpenAPI | Novo componente de documentação da API (springdoc compatível com Boot 4) |
 | #16 | Flyway | Migrações versionadas substituem `ddl-auto`; `ON DELETE CASCADE` e índice em `contatos.cliente_id` |
 | #17 | Dockerfile + Compose | Aplicação passa a ser contêiner junto com o banco |

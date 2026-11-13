@@ -1,11 +1,13 @@
 package io.github.suzanacavalcante.desafio.cliente;
 
+import io.github.suzanacavalcante.desafio.suporte.UsaPostgresDeTeste;
 import io.github.suzanacavalcante.desafio.cliente.dto.ClienteResponse;
 import io.github.suzanacavalcante.desafio.contato.dto.ContatoResponse;
 import jakarta.persistence.EntityManagerFactory;
 import org.hibernate.SessionFactory;
 import org.hibernate.stat.Statistics;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -19,7 +21,6 @@ import tools.jackson.databind.json.JsonMapper;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
-import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -30,14 +31,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /**
  * {@code GET /clientes} de ponta a ponta (controller + service + JPA + PostgreSQL real).
  * <p>
- * Segue o padrão de {@code ClienteApiTest}: sem {@code @Transactional} no teste, marca única por
- * execução e limpeza no {@code @AfterEach}. Como o banco pode ter outros clientes, as asserções
- * olham só os clientes desta execução (nome começando pela marca).
+ * Sem {@code @Transactional} no teste. O banco é o PostgreSQL descartável do Testcontainers e cada teste
+ * começa com as tabelas vazias ({@code truncate}), então as asserções olham a <b>listagem inteira</b>,
+ * sem filtrar por marca: o teste não depende de dados que outro teste tenha deixado.
  */
+@UsaPostgresDeTeste
 @SpringBootTest
 @AutoConfigureMockMvc
 @TestPropertySource(properties = {
-        "spring.jpa.hibernate.ddl-auto=update",
         "spring.jpa.properties.hibernate.generate_statistics=true"})
 class ClienteListagemApiTest {
 
@@ -52,18 +53,15 @@ class ClienteListagemApiTest {
     @Autowired
     EntityManagerFactory entityManagerFactory;
 
-    private final String marca = "qa-lista-" + UUID.randomUUID();
-
+    @BeforeEach
     @AfterEach
-    void limpar() {
-        jdbc.update("delete from contatos where cliente_id in (select id from clientes where nome like ?)", marca + "%");
-        jdbc.update("delete from clientes where nome like ?", marca + "%");
+    void esvaziarTabelas() {
+        jdbc.execute("truncate table contatos, clientes restart identity cascade");
     }
 
     private void criarCliente(String nome, int contatos) throws Exception {
         StringBuilder lista = new StringBuilder();
         for (int i = 0; i < contatos; i++) {
-            // telefone curto: a coluna tem no máximo 30 caracteres (o nome carrega a marca UUID)
             lista.append(i > 0 ? "," : "")
                     .append("{\"telefone\":\"t").append(i)
                     .append("\",\"email\":\"").append(i).append("@x.com\"}");
@@ -82,19 +80,15 @@ class ClienteListagemApiTest {
         return Arrays.asList(JSON.readValue(corpo, ClienteResponse[].class));
     }
 
-    private List<ClienteResponse> desteTeste() throws Exception {
-        return listar().stream().filter(c -> c.nome().startsWith(marca)).toList();
-    }
-
     @Test
     void cadaClienteVemComSeusContatosEClienteSemContatosVemComListaVazia() throws Exception {
-        criarCliente(marca + "-A", 3);
-        criarCliente(marca + "-B", 0);
-        criarCliente(marca + "-C", 1);
+        criarCliente("A", 3);
+        criarCliente("B", 0);
+        criarCliente("C", 1);
 
-        List<ClienteResponse> clientes = desteTeste();
+        List<ClienteResponse> clientes = listar();
 
-        assertEquals(List.of(marca + "-A", marca + "-B", marca + "-C"),
+        assertEquals(List.of("A", "B", "C"),
                 clientes.stream().map(ClienteResponse::nome).toList());
         assertEquals(3, clientes.get(0).contatos().size());
         assertTrue(clientes.get(1).contatos().isEmpty());
@@ -108,10 +102,10 @@ class ClienteListagemApiTest {
 
     @Test
     void clientesEContatosSaemOrdenadosPorId() throws Exception {
-        criarCliente(marca + "-A", 4);
-        criarCliente(marca + "-B", 4);
+        criarCliente("A", 4);
+        criarCliente("B", 4);
 
-        List<ClienteResponse> clientes = desteTeste();
+        List<ClienteResponse> clientes = listar();
 
         List<Long> idsDosClientes = clientes.stream().map(ClienteResponse::id).toList();
         assertEquals(idsDosClientes.stream().sorted().toList(), idsDosClientes);
@@ -124,9 +118,9 @@ class ClienteListagemApiTest {
     /** Critério de aceite: "uma única consulta SQL principal", sem N+1 mesmo com vários contatos. */
     @Test
     void listarExecutaUmaUnicaConsultaSqlMesmoComVariosClientesEContatos() throws Exception {
-        criarCliente(marca + "-A", 3);
-        criarCliente(marca + "-B", 3);
-        criarCliente(marca + "-C", 3);
+        criarCliente("A", 3);
+        criarCliente("B", 3);
+        criarCliente("C", 3);
         Statistics estatisticas = entityManagerFactory.unwrap(SessionFactory.class).getStatistics();
         estatisticas.clear();
 
