@@ -195,6 +195,55 @@ class OpenApiDocumentacaoTest {
         mockMvc.perform(get("/swagger-ui/index.html")).andExpect(status().isOk());
     }
 
+    /** Review de QA: o campo obrigatório é rejeitado quando vazio, então o documento não pode dizer minLength 0. */
+    @Test
+    void camposObrigatoriosDeTextoDocumentamMinLengthUm() {
+        JsonNode schemas = doc.path("components").path("schemas");
+        for (String[] campo : new String[][] {{"ClienteRequest", "nome"}, {"ContatoRequest", "telefone"},
+                {"ContatoRequest", "email"}, {"NovoContatoRequest", "telefone"}, {"NovoContatoRequest", "email"}}) {
+            JsonNode propriedade = schemas.path(campo[0]).path("properties").path(campo[1]);
+            assertEquals(1, propriedade.path("minLength").asInt(-1), campo[0] + "." + campo[1]);
+        }
+    }
+
+    /** Review de QA: a API só produz application/json nas respostas de sucesso (outro Accept dá 406), e não o curinga de tipos. */
+    @Test
+    void respostasDeSucessoDocumentamApenasApplicationJson() {
+        String[][] sucessos = {{"post", "/clientes", "201"}, {"get", "/clientes", "200"},
+                {"post", "/contatos", "201"}, {"get", "/clientes/{id}/contatos", "200"}};
+        for (String[] s : sucessos) {
+            JsonNode conteudo = operacao(s[0], s[1]).path("responses").path(s[2]).path("content");
+            assertEquals(List.of("application/json"), chaves(conteudo), s[0] + " " + s[1]);
+        }
+    }
+
+    /** Review de QA: o cabeçalho Host é controlado pelo cliente e não pode aparecer no documento. */
+    @Test
+    void documentoNaoRefleteOHostDaRequisicao() throws Exception {
+        String corpo = mockMvc.perform(get("/v3/api-docs").header("Host", "evil.example"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
+
+        JsonNode servidores = JSON.readTree(corpo).path("servers");
+        assertEquals(1, servidores.size());
+        assertEquals("/", servidores.get(0).path("url").asString());
+        assertFalse(corpo.contains("evil.example"));
+    }
+
+    /**
+     * O validador externo do Swagger fica desligado: com ele ligado, a URL da API seria enviada a
+     * {@code validator.swagger.io}. (O {@code oauth2RedirectUrl} da UI ainda é montado com o cabeçalho Host, mas é
+     * inerte: a API não tem OAuth, e nenhuma propriedade do springdoc o torna relativo.)
+     */
+    @Test
+    void validadorExternoDoSwaggerEstaDesligado() throws Exception {
+        String corpo = mockMvc.perform(get("/v3/api-docs/swagger-config"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
+
+        assertEquals("", JSON.readTree(corpo).path("validatorUrl").asString());
+    }
+
     private static List<String> chaves(JsonNode no) {
         List<String> chaves = new ArrayList<>();
         no.propertyNames().forEach(chaves::add);

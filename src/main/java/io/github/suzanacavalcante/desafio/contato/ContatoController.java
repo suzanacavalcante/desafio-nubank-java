@@ -40,7 +40,7 @@ public class ContatoController {
                     schema = @Schema(implementation = Problema.class),
                     examples = @ExampleObject(name = "não encontrado",
                             value = ExemplosDeErro.CLIENTE_NAO_ENCONTRADO_404)))
-    @PostMapping
+    @PostMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<ContatoResponse> criar(@Valid @RequestBody NovoContatoRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(contatoService.criar(request));
     }

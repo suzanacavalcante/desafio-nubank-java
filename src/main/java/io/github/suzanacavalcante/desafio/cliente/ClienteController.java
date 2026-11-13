@@ -43,7 +43,7 @@ public class ClienteController {
             content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
                     schema = @Schema(implementation = Problema.class),
                     examples = @ExampleObject(name = "validação", value = ExemplosDeErro.VALIDACAO_400)))
-    @PostMapping
+    @PostMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<ClienteResponse> criar(@Valid @RequestBody ClienteRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(clienteService.criar(request));
     }
@@ -53,7 +53,7 @@ public class ClienteController {
                     + "Cliente sem contatos vem com `contatos: []`. **Sem paginação**: a resposta cresce com a "
                     + "base inteira.")
     @ApiResponse(responseCode = "200", description = "Lista de clientes (vazia se não houver nenhum)")
-    @GetMapping
+    @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public List<ClienteResponse> listar() {
         return clienteService.listar();
     }
@@ -71,7 +71,7 @@ public class ClienteController {
                     schema = @Schema(implementation = Problema.class),
                     examples = @ExampleObject(name = "não encontrado",
                             value = ExemplosDeErro.CLIENTE_NAO_ENCONTRADO_404)))
-    @GetMapping("/{id}/contatos")
+    @GetMapping(value = "/{id}/contatos", produces = MediaType.APPLICATION_JSON_VALUE)
     public List<ContatoResponse> contatosDoCliente(
             @Parameter(description = "Identificador do cliente", example = "1") @PathVariable Long id) {
         return clienteService.contatosDoCliente(id);
