@@ -70,7 +70,7 @@ Ficam fora do formato os erros que acontecem **antes** do MVC ou fora dele: URL 
 
 Ainda **não** implementados (planejados nas issues):
 
-- Flyway (#16), Dockerfile (#17) e GitHub Actions (#18)
+- Dockerfile (#17) e GitHub Actions (#18)
 - Paginação em `GET /clientes` (#29)
 - Resiliência a queda do banco: timeout curto e 503 com `Retry-After` (#34)
 
@@ -107,7 +107,15 @@ No Windows (PowerShell), use `Copy-Item .env.example .env` e `.\mvnw.cmd spring-
 
 - No `.env`, escreva os valores **sem aspas**, sem `export` e sem comentário na mesma linha (o Compose e o Spring leem o arquivo de formas diferentes). Detalhes no próprio `.env.example`.
 - O banco só é publicado em `127.0.0.1`, não fica acessível pela rede.
-- O perfil **`dev`** (`ddl-auto: update`, log do SQL) só é ativado pelo `spring-boot:run`. Em uma IDE, defina `SPRING_PROFILES_ACTIVE=dev`. O jar empacotado e os testes **não** usam o perfil `dev`.
+- O perfil **`dev`** (log do SQL) só é ativado pelo `spring-boot:run`. Em uma IDE, defina `SPRING_PROFILES_ACTIVE=dev`. O jar empacotado e os testes **não** usam o perfil `dev`.
+
+### Banco de dados e migrations
+
+O schema é criado pelo **Flyway** na subida da aplicação (`src/main/resources/db/migration`, arquivos `V<n>__descricao.sql`); o Hibernate só **valida** (`ddl-auto: validate`) e a aplicação não sobe se uma entidade divergir das migrations. Para mudar o schema, crie uma nova migration (`V2__...sql`); **nunca edite uma já aplicada** (o Flyway acusa o checksum alterado).
+
+- **Banco já existente criado antes do Flyway** (pelo `ddl-auto: update` antigo): a aplicação não sobe e **não altera nenhum dado**; o Flyway diz `Found non-empty schema(s) "public" but no schema history table. Use baseline() or set baselineOnMigrate to true`. **Não** use `baselineOnMigrate`: ele marcaria o banco como se a V1 já estivesse aplicada e esconderia qualquer divergência entre o banco e as entidades. Recrie o banco de desenvolvimento: `docker compose down -v && docker compose up -d` (apaga os dados) e suba a aplicação de novo.
+- **Permissão de DDL:** as migrations rodam na subida com as mesmas credenciais da aplicação (`DB_USER`), que portanto precisa poder criar objetos no schema `public`. Quem separar um usuário de migration de um de execução em produção deve configurar `spring.flyway.user`/`password` à parte.
+- O `validate` do Hibernate não confere tamanho de coluna, índices nem chaves: mudanças desse tipo numa nova migration devem vir com teste equivalente ao `MigrationsFlywayTest`.
 
 ## Testes
 
