@@ -1,5 +1,6 @@
 package io.github.suzanacavalcante.desafio.cliente.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.github.suzanacavalcante.desafio.cliente.Cliente;
 import io.github.suzanacavalcante.desafio.contato.dto.ContatoRequest;
 import io.github.suzanacavalcante.desafio.validacao.SemCaracteresInvalidos;
@@ -21,8 +22,8 @@ import java.util.List;
  *                 conter elementos {@code null}, e cada contato é validado
  */
 public record ClienteRequest(
-        @NotBlank @SemCaracteresInvalidos @Size(max = Cliente.NOME_MAX) String nome,
-        @Size(max = CONTATOS_MAX) List<@NotNull @Valid ContatoRequest> contatos) {
+        @Schema(description = "Nome do cliente", example = "Maria Silva") @NotBlank @SemCaracteresInvalidos @Size(max = Cliente.NOME_MAX) String nome,
+        @Schema(description = "Contatos iniciais (opcional; até 50)") @Size(max = CONTATOS_MAX) List<@NotNull @Valid ContatoRequest> contatos) {
 
     /** Máximo de contatos aceitos em um único {@code POST /clientes}. */
     public static final int CONTATOS_MAX = 50;
