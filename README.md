@@ -113,7 +113,9 @@ No Windows (PowerShell), use `Copy-Item .env.example .env` e `.\mvnw.cmd spring-
 
 O schema é criado pelo **Flyway** na subida da aplicação (`src/main/resources/db/migration`, arquivos `V<n>__descricao.sql`); o Hibernate só **valida** (`ddl-auto: validate`) e a aplicação não sobe se uma entidade divergir das migrations. Para mudar o schema, crie uma nova migration (`V2__...sql`); **nunca edite uma já aplicada** (o Flyway acusa o checksum alterado).
 
-- **Banco já existente criado antes do Flyway** (pelo `ddl-auto: update` antigo): a `V1` falha porque as tabelas já existem. Recrie o banco de desenvolvimento: `docker compose down -v && docker compose up -d` (apaga os dados) e suba a aplicação de novo.
+- **Banco já existente criado antes do Flyway** (pelo `ddl-auto: update` antigo): a aplicação não sobe e **não altera nenhum dado**; o Flyway diz `Found non-empty schema(s) "public" but no schema history table. Use baseline() or set baselineOnMigrate to true`. **Não** use `baselineOnMigrate`: ele marcaria o banco como se a V1 já estivesse aplicada e esconderia qualquer divergência entre o banco e as entidades. Recrie o banco de desenvolvimento: `docker compose down -v && docker compose up -d` (apaga os dados) e suba a aplicação de novo.
+- **Permissão de DDL:** as migrations rodam na subida com as mesmas credenciais da aplicação (`DB_USER`), que portanto precisa poder criar objetos no schema `public`. Quem separar um usuário de migration de um de execução em produção deve configurar `spring.flyway.user`/`password` à parte.
+- O `validate` do Hibernate não confere tamanho de coluna, índices nem chaves: mudanças desse tipo numa nova migration devem vir com teste equivalente ao `MigrationsFlywayTest`.
 
 ## Testes
 

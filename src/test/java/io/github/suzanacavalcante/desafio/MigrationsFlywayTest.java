@@ -20,7 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * O schema do banco nasce das migrations do Flyway (#16) e o Hibernate só o valida. Este teste fixa o que
  * as migrations prometem e o Hibernate <b>não</b> confere: a FK com {@code ON DELETE CASCADE} e o índice em
- * {@code contatos.cliente_id} (o {@code validate} não olha índices nem a regra de exclusão da FK).
+ * {@code contatos.cliente_id} (o {@code validate} não olha índices, chaves primárias, nulidade da FK nem a regra de exclusão).
  * <p>
  * Que as entidades e as migrations batem entre si é provado pelo próprio contexto: com
  * {@code ddl-auto=validate} ele não sobe se faltar tabela/coluna ou se o tipo ou tamanho divergir.
@@ -79,6 +79,24 @@ class MigrationsFlywayTest {
     void contatoSemClienteExistenteEhRejeitadoPeloBanco() {
         assertThrows(DataIntegrityViolationException.class,
                 () -> jdbc.update("insert into contatos (telefone, email, cliente_id) values ('1', 'a@x.com', 999)"));
+    }
+
+    @Test
+    void contatoComClienteIdNuloEhRejeitadoPeloBanco() {
+        assertThrows(DataIntegrityViolationException.class,
+                () -> jdbc.update("insert into contatos (telefone, email, cliente_id) values ('1', 'a@x.com', null)"));
+    }
+
+    @Test
+    void idsSaoChavesPrimariasNasDuasTabelas() {
+        List<String> tabelas = jdbc.queryForList("""
+                select tc.table_name from information_schema.table_constraints tc
+                join information_schema.key_column_usage kcu
+                  on kcu.constraint_name = tc.constraint_name and kcu.table_schema = tc.table_schema
+                where tc.constraint_type = 'PRIMARY KEY' and kcu.column_name = 'id'
+                  and tc.table_name in ('clientes', 'contatos')
+                order by tc.table_name""", String.class);
+        assertEquals(List.of("clientes", "contatos"), tabelas);
     }
 
     @Test
