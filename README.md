@@ -2,7 +2,7 @@
 
 API REST de **clientes e contatos** (1 cliente → N contatos), feita com **Java 21**, **Spring Boot 4.1** e **PostgreSQL**.
 
-> README em evolução. A versão final (Swagger, CI, exemplos completos) vem na issue #19.
+> README em evolução. A versão final (CI, exemplos completos) vem na issue #19.
 
 ## Funcionalidades
 
@@ -12,6 +12,10 @@ API REST de **clientes e contatos** (1 cliente → N contatos), feita com **Java
 | POST | `/contatos` | Cria contato para um cliente existente (`clienteId` no corpo) | 201 |
 | GET | `/clientes` | Lista clientes com seus contatos | 200 |
 | GET | `/clientes/{id}/contatos` | Lista os contatos de um cliente | 200 |
+
+### Documentação interativa (Swagger/OpenAPI)
+
+Com a aplicação no ar: **http://localhost:8080/swagger-ui.html** lista os 4 endpoints com exemplos de corpo e os códigos de resposta (inclusive os erros 400 e 404 no formato `ProblemDetail`). O documento OpenAPI em JSON está em `/v3/api-docs`. Usa o springdoc-openapi **3.2.0**, a série compatível com o Spring Boot 4.1 (a 2.x é para o Boot 3).
 
 ### Exemplos
 
@@ -66,7 +70,7 @@ Ficam fora do formato os erros que acontecem **antes** do MVC ou fora dele: URL 
 
 Ainda **não** implementados (planejados nas issues):
 
-- Swagger/OpenAPI (#15), Flyway (#16), Dockerfile (#17) e GitHub Actions (#18)
+- Flyway (#16), Dockerfile (#17) e GitHub Actions (#18)
 - A listagem `GET /clientes` não tem paginação
 
 ## Arquitetura

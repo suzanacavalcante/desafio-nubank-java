@@ -1,5 +1,6 @@
 package io.github.suzanacavalcante.desafio.contato.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.github.suzanacavalcante.desafio.contato.Contato;
 import io.github.suzanacavalcante.desafio.validacao.SemCaracteresInvalidos;
 import jakarta.validation.constraints.Email;
@@ -18,7 +19,7 @@ import jakarta.validation.constraints.Size;
  * @param email     e-mail do contato
  */
 public record NovoContatoRequest(
-        @NotNull Long clienteId,
-        @NotBlank @SemCaracteresInvalidos @Size(max = Contato.TELEFONE_MAX) String telefone,
-        @NotBlank @Email @Size(max = Contato.EMAIL_MAX) String email) {
+        @Schema(description = "Cliente que receberá o contato (precisa existir)", example = "1") @NotNull Long clienteId,
+        @Schema(description = "Telefone do contato", example = "11888880000") @NotBlank @SemCaracteresInvalidos @Size(max = Contato.TELEFONE_MAX) String telefone,
+        @Schema(description = "E-mail do contato", example = "outro@exemplo.com") @NotBlank @Email @Size(max = Contato.EMAIL_MAX) String email) {
 }
