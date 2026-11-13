@@ -3,9 +3,9 @@
 API REST de **clientes e contatos** (1 cliente → N contatos), desafio técnico backend.
 Os diagramas usam [Mermaid](https://mermaid.js.org/) (sintaxe C4), então renderizam direto no GitHub (no VS Code, com a extensão Markdown Preview Mermaid Support).
 
-> **Estado documentado:** branch `main` com a validação (#10) e o tratamento global de erros (#11) implementados.
-> Itens planejados e **ainda não implementados** aparecem marcados como *(planejado)* e em tracejado:
-> Flyway (#16), Dockerfile (#17), CI (#18).
+> **Estado documentado:** branch `main` com validação (#10), tratamento global de erros (#11), testes com Testcontainers (#14) e Swagger/OpenAPI (#15) implementados.
+> Itens **ainda não implementados** aparecem marcados como *(planejado)*:
+> Flyway (#16), Dockerfile (#17), CI (#18), paginação (#29) e resiliência a queda do banco (#34).
 
 ---
 
@@ -54,8 +54,8 @@ C4Container
 
 | Contêiner | Tecnologia | Responsabilidade |
 |---|---|---|
-| Aplicação Spring Boot | Java 21, Spring Boot 4.1.2, Maven Wrapper, Lombok | API REST, transações, mapeamento DTO ↔ entidade, persistência com JPA. Empacotada como jar (`desafio-nubank-java-0.0.1-SNAPSHOT.jar`). |
-| Banco de dados | PostgreSQL 16, imagem oficial, volume `pgdata`, *healthcheck* `pg_isready` | Guarda os dados. Schema gerado pelo Hibernate (`ddl-auto: update`) só no perfil `dev`; no jar é `none`, e os testes de API (`*ApiTest`) usam `update` via `@TestPropertySource` (até o Flyway, #16). *(planejado: Flyway, #16)* |
+| Aplicação Spring Boot | Java 21, Spring Boot 4.1.2, Maven Wrapper, Lombok | API REST, validação, erros em `ProblemDetail`, transações, mapeamento DTO ↔ entidade, persistência com JPA e documentação interativa (Swagger UI). Empacotada como jar (`desafio-nubank-java-0.0.1-SNAPSHOT.jar`). |
+| Banco de dados | PostgreSQL 16, imagem oficial, volume `pgdata`, *healthcheck* `pg_isready` | Guarda os dados. Schema gerado pelo Hibernate (`ddl-auto: update`) só no perfil `dev`; no jar é `none`, e os testes de integração usam `update` via `@UsaPostgresDeTeste`, em um PostgreSQL descartável do Testcontainers. *(planejado: Flyway, #16, substitui o `update`)* |
 
 ### Configuração e ambientes
 
@@ -68,7 +68,7 @@ C4Container
 
 ## Nível 3 – Componentes (Aplicação Spring Boot)
 
-O código é organizado **por feature** (`cliente`, `contato`, `config`) no pacote base `io.github.suzanacavalcante.desafio`, seguindo camadas Controller → Service → Repository.
+O código é organizado **por feature** (`cliente`, `contato`) no pacote base `io.github.suzanacavalcante.desafio`, seguindo camadas Controller → Service → Repository. Os pacotes transversais são `config` (tratamento de erros), `validacao` (restrições reutilizáveis) e `openapi` (documentação da API).
 
 ```mermaid
 C4Component
@@ -124,6 +124,12 @@ C4Component
     Rel(cMap, tMap, "Delega contatos")
     Rel(cEnt, tEnt, "1 → N (OneToMany, cascade ALL, orphanRemoval)")
     Rel(tEnt, cEnt, "N → 1 (ManyToOne LAZY)")
+
+    Rel(dto, val, "Usa @SemCaracteresInvalidos")
+    Rel(cfg, cCtrl, "Converte exceções em ProblemDetail")
+    Rel(cfg, tCtrl, "Converte exceções em ProblemDetail")
+    Rel(oas, cCtrl, "Documenta")
+    Rel(oas, tCtrl, "Documenta")
 
     Rel(cRepo, db, "JPA/JDBC")
     Rel(tRepo, db, "JPA/JDBC")
@@ -262,7 +268,10 @@ sequenceDiagram
 | **DTOs em `record`**, sem expor entidades | Evita `LazyInitializationException` na serialização e recursão JSON cliente↔contato. |
 | `open-in-view: false` + mapeamento no service | Acesso preguiçoso só dentro da transação; falha cedo se alguém mapear fora. |
 | `JOIN FETCH` na listagem | Uma consulta em vez de N+1 (ver a ressalva: sem paginação, o custo cresce com o volume). |
-| `ddl-auto: update` só no perfil `dev` | Provisório até o Flyway; teste e jar usam `none`. |
+| `ddl-auto: update` só no perfil `dev` e nos testes | Provisório até o Flyway (#16); o jar usa `none`. |
+| Erros em `ProblemDetail` (RFC 7807) | Formato padrão e único; sem stack trace e sem ecoar o valor rejeitado. |
+| springdoc-openapi 3.2.0 | Série compatível com o Spring Boot 4.1; documentação por anotações nos controllers e DTOs. |
+| Testes com Testcontainers | Testes independentes do banco local, do Compose e do `.env`. |
 | Credenciais sem valor padrão | Segredos nunca ficam no código; vêm do `.env`/ambiente. |
 
 ## Qualidade e testes
@@ -275,6 +284,8 @@ sequenceDiagram
 
 | Issue | Mudança | Impacto no C4 |
 |---|---|---|
+| #29 | Paginação em `GET /clientes` | Contrato da listagem muda (parâmetros de página); sem alterar a estrutura de componentes |
+| #34 | Resiliência a queda do banco | Timeout curto e resposta 503 com `Retry-After`, tratados em `config` |
 | #16 | Flyway | Migrações versionadas substituem `ddl-auto`; `ON DELETE CASCADE` e índice em `contatos.cliente_id` |
 | #17 | Dockerfile + Compose | Aplicação passa a ser contêiner junto com o banco |
 | #18 | GitHub Actions | Novo sistema externo (CI) no nível de contexto |

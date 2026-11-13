@@ -71,11 +71,12 @@ Ficam fora do formato os erros que acontecem **antes** do MVC ou fora dele: URL 
 Ainda **não** implementados (planejados nas issues):
 
 - Flyway (#16), Dockerfile (#17) e GitHub Actions (#18)
-- A listagem `GET /clientes` não tem paginação
+- Paginação em `GET /clientes` (#29)
+- Resiliência a queda do banco: timeout curto e 503 com `Retry-After` (#34)
 
 ## Arquitetura
 
-Organizada **por feature** (`cliente`, `contato`, `config`) em camadas Controller → Service → Repository, com DTOs em `record` e mapeamento dentro da transação (`open-in-view: false`). Detalhes e diagramas em [docs/arquitetura-c4.md](docs/arquitetura-c4.md) (modelo C4).
+Organizada **por feature** (`cliente`, `contato`, mais os pacotes transversais `config`, `validacao` e `openapi`) em camadas Controller → Service → Repository, com DTOs em `record` e mapeamento dentro da transação (`open-in-view: false`). Detalhes e diagramas em [docs/arquitetura-c4.md](docs/arquitetura-c4.md) (modelo C4).
 
 ## Como rodar em desenvolvimento
 
