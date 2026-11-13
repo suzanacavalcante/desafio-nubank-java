@@ -1,7 +1,7 @@
 package io.github.suzanacavalcante.desafio.contato;
 
-import io.github.suzanacavalcante.desafio.config.ExemplosDeErro;
-import io.github.suzanacavalcante.desafio.config.Problema;
+import io.github.suzanacavalcante.desafio.openapi.ExemplosDeErro;
+import io.github.suzanacavalcante.desafio.openapi.Problema;
 import io.github.suzanacavalcante.desafio.contato.dto.ContatoResponse;
 import io.github.suzanacavalcante.desafio.contato.dto.NovoContatoRequest;
 import io.swagger.v3.oas.annotations.Operation;

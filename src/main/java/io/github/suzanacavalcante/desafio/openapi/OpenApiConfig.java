@@ -1,4 +1,4 @@
-package io.github.suzanacavalcante.desafio.config;
+package io.github.suzanacavalcante.desafio.openapi;
 
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Info;
@@ -10,6 +10,7 @@ import org.springframework.context.annotation.Configuration;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Informações gerais da documentação OpenAPI. A interface fica em {@code /swagger-ui.html} e o documento em
@@ -26,7 +27,9 @@ public class OpenApiConfig {
                 .servers(List.of(new Server().url("/")))
                 .info(new Info()
                     .title("API de Clientes e Contatos")
-                    .version("1.0.0")
+                    // versão da API (contrato), não do artefato (0.0.1-SNAPSHOT): incrementar quando o contrato mudar
+                // de forma incompatível ou ganhar endpoints
+                .version("1.0.0")
                     .description("""
                             Cadastro de clientes e de seus contatos (um cliente tem vários contatos).
 
@@ -48,8 +51,11 @@ public class OpenApiConfig {
                 "ContatoRequest", List.of("telefone", "email"),
                 "NovoContatoRequest", List.of("telefone", "email"));
         return openApi -> campos.forEach((schema, propriedades) -> {
-            Schema<?> definicao = openApi.getComponents().getSchemas().get(schema);
-            propriedades.forEach(campo -> definicao.getProperties().get(campo).setMinLength(1));
+            Schema<?> definicao = Objects.requireNonNull(openApi.getComponents().getSchemas().get(schema),
+                    "schema " + schema + " não existe mais; atualize o customizer em OpenApiConfig");
+            propriedades.forEach(campo -> Objects.requireNonNull(definicao.getProperties().get(campo),
+                    "campo " + schema + "." + campo + " não existe mais; atualize o customizer em OpenApiConfig")
+                    .setMinLength(1));
         });
     }
 }

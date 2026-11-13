@@ -2,8 +2,8 @@ package io.github.suzanacavalcante.desafio.cliente;
 
 import io.github.suzanacavalcante.desafio.cliente.dto.ClienteRequest;
 import io.github.suzanacavalcante.desafio.cliente.dto.ClienteResponse;
-import io.github.suzanacavalcante.desafio.config.ExemplosDeErro;
-import io.github.suzanacavalcante.desafio.config.Problema;
+import io.github.suzanacavalcante.desafio.openapi.ExemplosDeErro;
+import io.github.suzanacavalcante.desafio.openapi.Problema;
 import io.github.suzanacavalcante.desafio.contato.dto.ContatoResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;

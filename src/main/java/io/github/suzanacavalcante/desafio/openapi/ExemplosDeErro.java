@@ -1,8 +1,8 @@
-package io.github.suzanacavalcante.desafio.config;
+package io.github.suzanacavalcante.desafio.openapi;
 
 /**
  * Corpos de erro de exemplo usados nas anotações OpenAPI dos controllers (precisam ser constantes de
- * compilação). Seguem exatamente o formato que o {@link ApiExceptionHandler} devolve.
+ * compilação). Seguem exatamente o formato que o {@code ApiExceptionHandler} (pacote {@code config}) devolve.
  */
 public final class ExemplosDeErro {
 

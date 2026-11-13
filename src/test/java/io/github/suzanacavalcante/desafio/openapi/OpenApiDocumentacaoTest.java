@@ -1,4 +1,4 @@
-package io.github.suzanacavalcante.desafio.config;
+package io.github.suzanacavalcante.desafio.openapi;
 
 import io.github.suzanacavalcante.desafio.suporte.UsaPostgresDeTeste;
 import org.junit.jupiter.api.BeforeEach;
