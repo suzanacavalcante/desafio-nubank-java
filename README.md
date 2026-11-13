@@ -108,7 +108,8 @@ Sobe o PostgreSQL, espera o *healthcheck* dele e então sobe a API em `http://lo
 - A imagem (`Dockerfile`) é *multi-stage*: compila com JDK 21 + Maven Wrapper e roda só com o JRE 21, como usuário sem privilégios. O build **não executa os testes** (eles precisam de Docker, que não existe dentro do build): rode `./mvnw verify` antes.
 - Dentro da rede do Compose a API fala com o banco em `db:5432`; `DB_PORT` (padrão 5434) é só a porta publicada no host. `APP_PORT` (padrão 8080) muda a porta da API no host. Os dois ficam acessíveis apenas em `127.0.0.1`.
 - Após mudar o código, rode `docker compose up --build` de novo. Para parar: `docker compose down` (ou `down -v` para apagar também os dados).
-- Esta opção **não** usa o perfil `dev` (sem log de SQL).
+- Esta opção **não** usa o perfil `dev` (sem log de SQL). A API tem limite de 512 MB de memória (`mem_limit`).
+- **Se a API ficar reiniciando** (`docker compose ps` mostra `restarting`), veja `docker compose logs app`. A causa mais comum é um volume `pgdata` criado antes do Flyway (veja "Banco de dados e migrations") ou um `DB_PASSWORD` alterado depois que o volume foi criado (o PostgreSQL mantém a senha antiga: use `docker compose down -v`).
 
 ### Configuração
 
