@@ -126,10 +126,9 @@ C4Component
     Rel(tEnt, cEnt, "N → 1 (ManyToOne LAZY)")
 
     Rel(dto, val, "Usa @SemCaracteresInvalidos")
-    Rel(cfg, cCtrl, "Converte exceções em ProblemDetail")
-    Rel(cfg, tCtrl, "Converte exceções em ProblemDetail")
-    Rel(oas, cCtrl, "Documenta")
-    Rel(oas, tCtrl, "Documenta")
+    Rel(cfg, cExc, "Converte em 404 (ProblemDetail)")
+    Rel(cCtrl, oas, "Documenta-se com @Operation/@Schema e Problema")
+    Rel(tCtrl, oas, "Documenta-se com @Operation/@Schema e Problema")
 
     Rel(cRepo, db, "JPA/JDBC")
     Rel(tRepo, db, "JPA/JDBC")
@@ -284,8 +283,8 @@ sequenceDiagram
 
 | Issue | Mudança | Impacto no C4 |
 |---|---|---|
-| #29 | Paginação em `GET /clientes` | Contrato da listagem muda (parâmetros de página); sem alterar a estrutura de componentes |
-| #34 | Resiliência a queda do banco | Timeout curto e resposta 503 com `Retry-After`, tratados em `config` |
 | #16 | Flyway | Migrações versionadas substituem `ddl-auto`; `ON DELETE CASCADE` e índice em `contatos.cliente_id` |
 | #17 | Dockerfile + Compose | Aplicação passa a ser contêiner junto com o banco |
 | #18 | GitHub Actions | Novo sistema externo (CI) no nível de contexto |
+| #29 | Paginação em `GET /clientes` | Contrato da listagem muda (parâmetros de página); sem alterar a estrutura de componentes |
+| #34 | Resiliência a queda do banco | Timeout curto e resposta 503 com `Retry-After`, tratados em `config` |
