@@ -110,7 +110,11 @@ No Windows (PowerShell), use `Copy-Item .env.example .env` e `.\mvnw.cmd spring-
 ./mvnw verify
 ```
 
-Cobrem entidades, mappers, services (Mockito), controllers (`@WebMvcTest`), repositórios (`@DataJpaTest`) e a API de ponta a ponta. Por enquanto os testes que sobem o contexto precisam do banco no ar (`docker compose up -d`); a issue #14 troca isso por Testcontainers.
+Cobrem entidades, mappers, services (Mockito), controllers (`@WebMvcTest`), repositórios (`@DataJpaTest`) e a API de ponta a ponta.
+
+**Pré-requisito: Docker.** Os testes de integração usam o **Testcontainers** com `postgres:16`: sobem um PostgreSQL descartável sozinhos (um por execução, compartilhado entre os testes), então **não** dependem de banco local, do Docker Compose nem do `.env`, e não tocam no banco de desenvolvimento. Os testes sem banco (unitários e `@WebMvcTest`) não precisam de Docker.
+
+> No Windows com o Docker instalado só no WSL, rode o `./mvnw verify` **dentro do WSL** (o Testcontainers precisa alcançar o daemon do Docker).
 
 Testes de regressão de bugs conhecidos e ainda abertos devem ter a tag `bug-conhecido` e ficam fora por padrão. Para rodá-los:
 

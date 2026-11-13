@@ -1,7 +1,11 @@
 package io.github.suzanacavalcante.desafio.contato;
 
+import io.github.suzanacavalcante.desafio.suporte.UsaPostgresDeTeste;
 import io.github.suzanacavalcante.desafio.cliente.Cliente;
 import io.github.suzanacavalcante.desafio.cliente.ClienteRepository;
+import jakarta.persistence.EntityManagerFactory;
+import org.hibernate.SessionFactory;
+import org.hibernate.stat.Statistics;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,9 +32,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Segue o padrão de {@code ClienteApiTest}: sem {@code @Transactional} no teste, com marca única
  * por execução e limpeza no {@code @AfterEach}.
  */
+@UsaPostgresDeTeste
 @SpringBootTest
 @AutoConfigureMockMvc
-@TestPropertySource(properties = "spring.jpa.hibernate.ddl-auto=update")
+@TestPropertySource(properties = "spring.jpa.properties.hibernate.generate_statistics=true")
 class ContatoApiTest {
 
     @Autowired
@@ -41,6 +46,9 @@ class ContatoApiTest {
 
     @Autowired
     JdbcTemplate jdbc;
+
+    @Autowired
+    EntityManagerFactory entityManagerFactory;
 
     private final String marca = "qa-contato-" + UUID.randomUUID();
 
@@ -109,5 +117,32 @@ class ContatoApiTest {
         assertEquals(0, jdbc.queryForObject(
                 "select count(*) from contatos where telefone = '48123' and email = 'a@x.com' and cliente_id = ?",
                 Integer.class, ID_INEXISTENTE));
+    }
+
+    /**
+     * Review do PR #27: {@code POST /contatos} <b>não</b> inicializa a coleção LAZY {@code Cliente.contatos}.
+     * O cliente já tem 5 contatos; se o service voltasse a usar {@code Cliente.adicionarContato}, a coleção
+     * seria carregada só para acrescentar um (o {@code ContatoServiceTest} apenas guarda a interação).
+     */
+    @Test
+    void postContatosNaoInicializaAColecaoLazyDoCliente() throws Exception {
+        Cliente cliente = new Cliente();
+        cliente.setNome(marca);
+        for (int i = 0; i < 5; i++) {
+            Contato contato = new Contato();
+            contato.setTelefone("t" + i);
+            contato.setEmail(i + "@x.com");
+            cliente.adicionarContato(contato);
+        }
+        long clienteId = clienteRepository.save(cliente).getId();
+        Statistics estatisticas = entityManagerFactory.unwrap(SessionFactory.class).getStatistics();
+        estatisticas.clear();
+
+        postar("{\"clienteId\":" + clienteId + ",\"telefone\":\"48123\",\"email\":\"a@x.com\"}")
+                .andExpect(status().isCreated());
+
+        assertEquals(0, estatisticas.getCollectionLoadCount(), "a coleção LAZY não deve ser carregada");
+        assertEquals(0, estatisticas.getCollectionFetchCount(), "a coleção LAZY não deve ser buscada");
+        assertEquals(6, contatosDoCliente(clienteId));
     }
 }

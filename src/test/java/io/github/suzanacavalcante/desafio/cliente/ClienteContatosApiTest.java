@@ -1,5 +1,6 @@
 package io.github.suzanacavalcante.desafio.cliente;
 
+import io.github.suzanacavalcante.desafio.suporte.UsaPostgresDeTeste;
 import io.github.suzanacavalcante.desafio.contato.Contato;
 import jakarta.persistence.EntityManagerFactory;
 import org.hibernate.SessionFactory;
@@ -29,10 +30,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Segue o padrão de {@code ClienteApiTest}: sem {@code @Transactional} no teste, marca única por
  * execução e limpeza no {@code @AfterEach}.
  */
+@UsaPostgresDeTeste
 @SpringBootTest
 @AutoConfigureMockMvc
 @TestPropertySource(properties = {
-        "spring.jpa.hibernate.ddl-auto=update",
         "spring.jpa.properties.hibernate.generate_statistics=true"})
 class ClienteContatosApiTest {
 

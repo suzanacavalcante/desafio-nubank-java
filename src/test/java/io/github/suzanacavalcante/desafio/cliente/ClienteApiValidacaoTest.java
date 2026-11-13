@@ -1,5 +1,6 @@
 package io.github.suzanacavalcante.desafio.cliente;
 
+import io.github.suzanacavalcante.desafio.suporte.UsaPostgresDeTeste;
 import io.github.suzanacavalcante.desafio.cliente.dto.ClienteRequest;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -8,7 +9,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.stream.Collectors;
@@ -25,9 +25,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * <b>400</b> e <b>nada</b> chega ao banco. Nasceu como os testes de regressão de QA (relatório de
  * 2026-11-07, com {@code @Tag("bug-conhecido")}); a tag saiu quando a validação foi implementada.
  */
+@UsaPostgresDeTeste
 @SpringBootTest
 @AutoConfigureMockMvc
-@TestPropertySource(properties = "spring.jpa.hibernate.ddl-auto=update")
 class ClienteApiValidacaoTest {
 
     private static final String MARCA = "qa-validacao-";

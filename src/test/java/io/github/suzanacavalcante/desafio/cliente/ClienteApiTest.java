@@ -1,5 +1,6 @@
 package io.github.suzanacavalcante.desafio.cliente;
 
+import io.github.suzanacavalcante.desafio.suporte.UsaPostgresDeTeste;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -7,7 +8,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.nio.charset.StandardCharsets;
@@ -26,9 +26,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * quando ele abre e dá rollback na própria transação. Para não sujar o banco, cada cliente criado
  * leva um sufixo único e é removido no {@code @AfterEach}.
  */
+@UsaPostgresDeTeste
 @SpringBootTest
 @AutoConfigureMockMvc
-@TestPropertySource(properties = "spring.jpa.hibernate.ddl-auto=update")
 class ClienteApiTest {
 
     @Autowired

@@ -1,7 +1,10 @@
 package io.github.suzanacavalcante.desafio.cliente;
 
+import io.github.suzanacavalcante.desafio.suporte.UsaPostgresDeTeste;
 import io.github.suzanacavalcante.desafio.contato.Contato;
 import io.github.suzanacavalcante.desafio.contato.ContatoRepository;
+import org.hibernate.SessionFactory;
+import org.hibernate.stat.Statistics;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
@@ -18,15 +21,16 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Persistência do agregado Cliente/Contato contra o PostgreSQL real (o do docker compose).
+ * Persistência do agregado Cliente/Contato contra um PostgreSQL real e descartável (Testcontainers).
  * Cada teste roda numa transação que sofre rollback, então não deixa dados no banco.
  * <p>
- * {@code ddl-auto=update} só garante que as tabelas existam num banco recém-criado (os testes
- * normalmente rodam com {@code none}); ele nunca apaga nada. Será desnecessário com o Flyway (#16).
+ * Cobre os três cenários do agregado: (1) persistir cliente com contatos em cascata; (2) remover um
+ * contato da lista apaga o órfão ({@code orphanRemoval}); (3) excluir o cliente apaga seus contatos.
  */
+@UsaPostgresDeTeste
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@TestPropertySource(properties = "spring.jpa.hibernate.ddl-auto=update")
+@TestPropertySource(properties = "spring.jpa.properties.hibernate.generate_statistics=true")
 class ClienteRepositoryTest {
 
     @Autowired
@@ -199,5 +203,28 @@ class ClienteRepositoryTest {
         Cliente emailLongo = cliente("E");
         emailLongo.adicionarContato(contato("1", "e".repeat(Contato.EMAIL_MAX + 1)));
         assertThrows(DataIntegrityViolationException.class, () -> clienteRepository.saveAndFlush(emailLongo));
+    }
+
+    /** Critério da #14 (review do PR #24): {@code findAllComContatos} é <b>uma</b> consulta, sem N+1. */
+    @Test
+    void findAllComContatosExecutaUmaUnicaConsultaSql() {
+        for (int i = 0; i < 3; i++) {
+            Cliente c = cliente("Stat" + i);
+            for (int j = 0; j < 3; j++) {
+                c.adicionarContato(contato("t" + j, i + "-" + j + "@x.com"));
+            }
+            clienteRepository.save(c);
+        }
+        limparCache();
+        Statistics estatisticas = em.getEntityManager().getEntityManagerFactory()
+                .unwrap(SessionFactory.class).getStatistics();
+        estatisticas.clear();
+
+        List<Cliente> clientes = clienteRepository.findAllComContatos();
+        // percorre as coleções: se fossem LAZY, cada uma dispararia uma consulta (N+1)
+        clientes.forEach(c -> assertEquals(3, c.getContatos().size()));
+
+        assertEquals(1, estatisticas.getPrepareStatementCount(),
+                "esperava 1 SELECT; houve " + estatisticas.getPrepareStatementCount());
     }
 }
