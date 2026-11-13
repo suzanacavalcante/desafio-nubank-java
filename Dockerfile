@@ -7,6 +7,8 @@ WORKDIR /build
 # Primeiro só o que define as dependências: esta camada fica em cache enquanto o pom.xml não mudar.
 COPY mvnw pom.xml ./
 COPY .mvn .mvn
+# O modo executável do mvnw depende do checkout (no Windows costuma vir sem ele): não confie nele.
+RUN chmod +x mvnw
 RUN --mount=type=cache,target=/root/.m2 ./mvnw -B -q dependency:go-offline
 
 # Depois o código. Os testes de integração precisam de Docker (Testcontainers), que não existe aqui:
