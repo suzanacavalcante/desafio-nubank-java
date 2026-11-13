@@ -70,7 +70,7 @@ Ficam fora do formato os erros que acontecem **antes** do MVC ou fora dele: URL 
 
 Ainda **não** implementados (planejados nas issues):
 
-- Dockerfile (#17) e GitHub Actions (#18)
+- GitHub Actions (#18)
 - Paginação em `GET /clientes` (#29)
 - Resiliência a queda do banco: timeout curto e 503 com `Retry-After` (#34)
 
@@ -86,14 +86,29 @@ Pré-requisitos: JDK 21 e Docker (com Docker Compose).
 # 1. Variáveis de ambiente (lidas pelo Compose e pela aplicação)
 cp .env.example .env
 
-# 2. Banco PostgreSQL
-docker compose up -d --wait
+# 2. Banco PostgreSQL (só o serviço db; o serviço app é a opção da próxima seção)
+docker compose up -d --wait db
 
 # 3. Aplicação (ativa o perfil dev automaticamente)
 ./mvnw spring-boot:run
 ```
 
 No Windows (PowerShell), use `Copy-Item .env.example .env` e `.\mvnw.cmd spring-boot:run`. Os `curl` da seção Exemplos são para Bash; no PowerShell use `Invoke-RestMethod` (ou `curl.exe` com o JSON em um arquivo, `-d @corpo.json`).
+
+### Tudo em contêineres (banco + API)
+
+Pré-requisito: só o Docker. Não precisa de JDK nem de `.env` (os padrões do Compose servem; para mudar usuário, senha ou portas, crie o `.env` como acima).
+
+```bash
+docker compose up --build
+```
+
+Sobe o PostgreSQL, espera o *healthcheck* dele e então sobe a API em `http://localhost:8080` (Swagger em `/swagger-ui.html`). As migrations rodam na subida.
+
+- A imagem (`Dockerfile`) é *multi-stage*: compila com JDK 21 + Maven Wrapper e roda só com o JRE 21, como usuário sem privilégios. O build **não executa os testes** (eles precisam de Docker, que não existe dentro do build): rode `./mvnw verify` antes.
+- Dentro da rede do Compose a API fala com o banco em `db:5432`; `DB_PORT` (padrão 5434) é só a porta publicada no host. `APP_PORT` (padrão 8080) muda a porta da API no host. Os dois ficam acessíveis apenas em `127.0.0.1`.
+- Após mudar o código, rode `docker compose up --build` de novo. Para parar: `docker compose down` (ou `down -v` para apagar também os dados).
+- Esta opção **não** usa o perfil `dev` (sem log de SQL).
 
 ### Configuração
 
@@ -138,9 +153,9 @@ Testes de regressão de bugs conhecidos e ainda abertos devem ter a tag `bug-con
 ./mvnw test -Dgroups=bug-conhecido -DexcludedGroups=nenhum
 ```
 
-## Parar o banco
+## Parar o banco (e a API)
 
 ```bash
 docker compose stop        # pausa (mantém os dados)
-docker compose down -v     # remove container e dados
+docker compose down -v     # remove contêineres e dados
 ```
