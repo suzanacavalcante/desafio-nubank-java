@@ -39,9 +39,11 @@ Content-Type: application/json
   "email": "outro@exemplo.com"
 }
 
-### 4. Lista todos os clientes com seus contatos  ->  200
-### Atenção: não é paginado (devolve a base inteira); paginação é a issue #29.
+### 4. Lista os clientes com seus contatos (paginado; padrão page=0, size=20)  ->  200
 GET {{host}}/clientes
+
+### 4b. Segunda página de 10  ->  200
+GET {{host}}/clientes?page=1&size=10
 
 ### 5. Lista os contatos de um cliente  ->  200
 GET {{host}}/clientes/{{clienteId}}/contatos
@@ -92,6 +94,9 @@ GET {{host}}/clientes/999999/contatos
 
 ### 11. Id que não é número  ->  400
 GET {{host}}/clientes/abc/contatos
+
+### 11b. size acima do máximo (100)  ->  400
+GET {{host}}/clientes?size=101
 
 ###
 ### ---- Documentação ----

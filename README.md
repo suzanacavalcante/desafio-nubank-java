@@ -38,7 +38,7 @@ Quando o log mostrar `Started DesafioNubankJavaApplication`, a API está em **ht
 curl -X POST http://localhost:8080/clientes -H "Content-Type: application/json" \
   -d '{"nome":"Maria","contatos":[{"telefone":"11999990000","email":"maria@exemplo.com"}]}'
 
-# lista os clientes com seus contatos
+# lista os clientes com seus contatos (paginado: 20 por página por padrão)
 curl http://localhost:8080/clientes
 ```
 
@@ -52,10 +52,29 @@ curl http://localhost:8080/clientes
 |---|---|---|---|---|
 | POST | `/clientes` | Cria cliente, com ou sem contatos | 201 | 400 |
 | POST | `/contatos` | Cria contato para um cliente existente (`clienteId` no corpo) | 201 | 400, 404 |
-| GET | `/clientes` | Lista clientes com seus contatos | 200 | |
+| GET | `/clientes` | Lista clientes com seus contatos, **paginado** (`page`, `size`) | 200 | 400 |
 | GET | `/clientes/{id}/contatos` | Lista os contatos de um cliente | 200 | 400, 404 |
 
-> **`GET /clientes` não é paginado.** A resposta traz a base inteira (o review do PR #28 estimou ~8 MB para 20 mil clientes). A paginação é a evolução prevista na issue [#29](https://github.com/suzanacavalcante/desafio-nubank-java/issues/29); até lá, não use esse endpoint com volumes grandes.
+### Paginação de `GET /clientes`
+
+`GET /clientes?page=0&size=20` devolve uma página de clientes (por id), cada um com todos os seus contatos:
+
+| Parâmetro | Padrão | Limites | Observação |
+|---|---|---|---|
+| `page` | `0` | `0` a **`10.000.000`** | a primeira página é a 0; o teto existe porque `page * size` precisa caber em um `int` |
+| `size` | `20` | `1` a **`100`** | acima de 100 é **400** (não há corte silencioso) |
+
+```json
+{
+  "content": [ { "id": 1, "nome": "Maria", "contatos": [ { "id": 1, "telefone": "11999990000", "email": "maria@exemplo.com", "clienteId": 1 } ] } ],
+  "page": 0, "size": 20, "totalElements": 42, "totalPages": 3
+}
+```
+
+- Uma página além da última responde **200** com `content: []` (e o `totalElements` correto).
+- Valor fora dos limites (inclusive `page` acima de 10.000.000) ou que não é número responde **400** no formato de erro padrão (`erros` diz qual parâmetro).
+- O custo é **constante em consultas**: uma de ids, uma de contagem (dispensada quando a primeira página não está cheia) e uma dos contatos daquela página (`JOIN FETCH`), sem N+1, qualquer que seja o `size`. A paginação é em duas consultas de propósito: com `JOIN FETCH` de coleção o Hibernate paginaria em memória.
+- **Mudança de contrato:** antes a resposta era uma lista JSON pura; agora é o envelope acima. Em dados que mudam entre uma página e outra (clientes novos), a paginação por `page` pode repetir ou pular itens; para este desafio isso é aceitável.
 
 ### Exemplos
 
@@ -91,7 +110,8 @@ Todo erro tratado pelo Spring MVC é um `ProblemDetail` (`application/problem+js
 | Situação | Status |
 |---|---|
 | Campo inválido (`@Valid`) | **400**, com `erros` (campo → mensagem, em português) |
-| JSON malformado; tipo errado em um campo (a resposta diz o campo, não o valor); `{id}` que não é número | **400** |
+| JSON malformado; tipo errado em um campo (a resposta diz o campo, não o valor); `{id}`, `page` ou `size` que não é número | **400** |
+| `page` ou `size` fora dos limites (`size` acima de 100, `page` acima de 10.000.000) | **400**, com `erros` (parâmetro → mensagem) |
 | Cliente inexistente (`POST /contatos`, `GET /clientes/{id}/contatos`) | **404** |
 | Método ou rota inexistente | **405** / **404** |
 | Erro inesperado | **500** genérico (o detalhe fica só no log) |
@@ -133,7 +153,7 @@ Diagramas (contexto, contêineres, componentes e código) em [docs/arquitetura-c
 
 ## O que eu faria a seguir
 
-- **Paginação** em `GET /clientes` (#29), com ordenação estável e limite de página máximo; ajustar o *healthcheck* do Compose, que hoje lê a tabela inteira.
+- **Paginação por cursor** (*keyset*, `id > último`) em `GET /clientes`, se a base crescer a ponto de o `OFFSET` pesar ou de a paginação por `page` repetir/pular itens com escritas concorrentes.
 - **Resiliência a queda do banco** (#34): timeout curto de conexão e resposta **503** com `Retry-After`, em vez de 500.
 - **Operações que faltam ao CRUD**: buscar, atualizar e remover clientes e contatos (o desafio pede só cadastro e consulta); ao remover, a FK já tem `ON DELETE CASCADE`.
 - **Autenticação e autorização** (por exemplo, OAuth2/JWT com Spring Security), e *rate limiting* nas rotas de escrita.

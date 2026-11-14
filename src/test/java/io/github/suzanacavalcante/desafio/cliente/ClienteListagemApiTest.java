@@ -16,9 +16,11 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -73,11 +75,26 @@ class ClienteListagemApiTest {
                 .andExpect(status().isCreated());
     }
 
-    private List<ClienteResponse> listar() throws Exception {
-        String corpo = mockMvc.perform(get("/clientes"))
+    private JsonNode pagina(String... paramsEValores) throws Exception {
+        var requisicao = get("/clientes");
+        for (int i = 0; i < paramsEValores.length; i += 2) {
+            requisicao.param(paramsEValores[i], paramsEValores[i + 1]);
+        }
+        String corpo = mockMvc.perform(requisicao)
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
-        return Arrays.asList(JSON.readValue(corpo, ClienteResponse[].class));
+        return JSON.readTree(corpo);
+    }
+
+    /** Todos os clientes, sem paginar explicitamente (a página padrão cabe nos poucos clientes de cada teste). */
+    private List<ClienteResponse> listar() throws Exception {
+        return Arrays.asList(JSON.treeToValue(pagina().get("content"), ClienteResponse[].class));
+    }
+
+    private List<String> nomes(JsonNode pagina) {
+        List<String> nomes = new ArrayList<>();
+        pagina.get("content").forEach(c -> nomes.add(c.get("nome").asString()));
+        return nomes;
     }
 
     @Test
@@ -115,18 +132,157 @@ class ClienteListagemApiTest {
         }
     }
 
-    /** Critério de aceite: "uma única consulta SQL principal", sem N+1 mesmo com vários contatos. */
     @Test
-    void listarExecutaUmaUnicaConsultaSqlMesmoComVariosClientesEContatos() throws Exception {
+    void paginaOsClientesPorIdComOEnvelopeCompleto() throws Exception {
+        for (String nome : List.of("A", "B", "C", "D", "E")) {
+            criarCliente(nome, 1);
+        }
+
+        JsonNode primeira = pagina("page", "0", "size", "2");
+        JsonNode segunda = pagina("page", "1", "size", "2");
+        JsonNode terceira = pagina("page", "2", "size", "2");
+
+        assertEquals(List.of("A", "B"), nomes(primeira));
+        assertEquals(List.of("C", "D"), nomes(segunda));
+        assertEquals(List.of("E"), nomes(terceira));
+        for (JsonNode p : List.of(primeira, segunda, terceira)) {
+            assertEquals(5, p.get("totalElements").asLong());
+            assertEquals(3, p.get("totalPages").asInt());
+            assertEquals(2, p.get("size").asInt());
+        }
+        assertEquals(1, segunda.get("page").asInt());
+        assertEquals(2, terceira.get("page").asInt());
+    }
+
+    @Test
+    void cadaClienteDaPaginaVemComTodosOsSeusContatosEmOrdem() throws Exception {
         criarCliente("A", 3);
-        criarCliente("B", 3);
-        criarCliente("C", 3);
+        criarCliente("B", 0);
+        criarCliente("C", 2);
+
+        JsonNode pagina = pagina("size", "2");
+
+        assertEquals(List.of("A", "B"), nomes(pagina));
+        assertEquals(3, pagina.get("content").get(0).get("contatos").size());
+        assertEquals(0, pagina.get("content").get(1).get("contatos").size());
+        assertEquals(2, pagina("page", "1", "size", "2").get("content").get(0).get("contatos").size());
+    }
+
+    @Test
+    void semParametrosUsaPagina0ETamanho20() throws Exception {
+        for (int i = 0; i < 25; i++) {
+            criarCliente("N" + i, 0);
+        }
+
+        JsonNode pagina = pagina();
+
+        assertEquals(0, pagina.get("page").asInt());
+        assertEquals(20, pagina.get("size").asInt());
+        assertEquals(20, pagina.get("content").size());
+        assertEquals(25, pagina.get("totalElements").asLong());
+        assertEquals(2, pagina.get("totalPages").asInt());
+    }
+
+    @Test
+    void paginaAlemDaUltimaDevolve200ComContentVazioEOTotalCerto() throws Exception {
+        criarCliente("A", 1);
+
+        JsonNode pagina = pagina("page", "7", "size", "10");
+
+        assertEquals(0, pagina.get("content").size());
+        assertEquals(7, pagina.get("page").asInt());
+        assertEquals(1, pagina.get("totalElements").asLong());
+        assertEquals(1, pagina.get("totalPages").asInt());
+    }
+
+    @Test
+    void semClientesDevolveEnvelopeVazio() throws Exception {
+        JsonNode pagina = pagina();
+
+        assertEquals(0, pagina.get("content").size());
+        assertEquals(0, pagina.get("totalElements").asLong());
+        assertEquals(0, pagina.get("totalPages").asInt());
+    }
+
+    /** Limite máximo: 100 clientes numa página passam; 101 é recusado. */
+    @Test
+    void sizeNoMaximoPassaEAcimaDoMaximoEhRecusado() throws Exception {
+        criarCliente("A", 0);
+
+        assertEquals(100, pagina("size", "100").get("size").asInt());
+        mockMvc.perform(get("/clientes").param("size", "101")).andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void ultimaPaginaPermitidaNaoEstouraEDevolveVazio() throws Exception {
+        criarCliente("A", 0);
+
+        // page * size = 1 bilhão: cabe em int, então o OFFSET é aceito (acima disso daria 500)
+        JsonNode pagina = pagina("page", "10000000", "size", "100");
+
+        assertEquals(0, pagina.get("content").size());
+        assertEquals(1, pagina.get("totalElements").asLong());
+    }
+
+    @Test
+    void parametrosInvalidosDevolvem400NoFormatoDeErro() throws Exception {
+        mockMvc.perform(get("/clientes").param("size", "0")).andExpect(status().isBadRequest());
+        mockMvc.perform(get("/clientes").param("page", "-1")).andExpect(status().isBadRequest());
+        mockMvc.perform(get("/clientes").param("page", "x")).andExpect(status().isBadRequest());
+        mockMvc.perform(get("/clientes").param("size", "99999999999")).andExpect(status().isBadRequest());
+        // sem o limite de page, isto estouraria o int do OFFSET e daria 500
+        mockMvc.perform(get("/clientes").param("page", String.valueOf(Integer.MAX_VALUE)).param("size", "100"))
+                .andExpect(status().isBadRequest());
+    }
+
+    /**
+     * Critério de aceite da #29: o número de consultas <b>não cresce</b> com o tamanho da página nem com o número
+     * de contatos (sem N+1). Página cheia: 1 de ids + 1 de contagem + 1 dos contatos = 3; página inicial não cheia:
+     * a contagem é dispensada (2).
+     */
+    @Test
+    void numeroDeConsultasNaoCresceComOTamanhoDaPagina() throws Exception {
+        for (int i = 0; i < 12; i++) {
+            criarCliente("C" + i, 3);
+        }
+        Statistics estatisticas = entityManagerFactory.unwrap(SessionFactory.class).getStatistics();
+
+        for (String size : List.of("1", "2", "5", "10")) {
+            estatisticas.clear();
+            JsonNode pagina = pagina("size", size);
+            assertEquals(Integer.parseInt(size), pagina.get("content").size());
+            assertEquals(3, estatisticas.getPrepareStatementCount(),
+                    "size=" + size + "; consultas: " + Arrays.toString(estatisticas.getQueries()));
+        }
+        estatisticas.clear();
+        pagina("size", "100");
+        assertEquals(2, estatisticas.getPrepareStatementCount(),
+                "página inicial não cheia dispensa a contagem; consultas: " + Arrays.toString(estatisticas.getQueries()));
+    }
+
+    @Test
+    void numeroDeConsultasEOMesmoEmQualquerPagina() throws Exception {
+        for (int i = 0; i < 9; i++) {
+            criarCliente("P" + i, 2);
+        }
+        Statistics estatisticas = entityManagerFactory.unwrap(SessionFactory.class).getStatistics();
+
+        for (String page : List.of("0", "1", "2")) {
+            estatisticas.clear();
+            pagina("page", page, "size", "3");
+            assertEquals(3, estatisticas.getPrepareStatementCount(), "page=" + page);
+        }
+    }
+
+    /** Página vazia (além da última): 2 consultas (ids + contagem), a dos contatos nem acontece. */
+    @Test
+    void paginaVaziaNaoConsultaOsContatos() throws Exception {
+        criarCliente("A", 2);
         Statistics estatisticas = entityManagerFactory.unwrap(SessionFactory.class).getStatistics();
         estatisticas.clear();
 
-        listar();
+        pagina("page", "3", "size", "5");
 
-        assertEquals(1, estatisticas.getPrepareStatementCount(),
-                "esperava 1 SELECT; consultas: " + Arrays.toString(estatisticas.getQueries()));
+        assertEquals(2, estatisticas.getPrepareStatementCount(), Arrays.toString(estatisticas.getQueries()));
     }
 }
