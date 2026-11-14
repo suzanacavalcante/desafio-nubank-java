@@ -2,6 +2,7 @@ package io.github.suzanacavalcante.desafio.contato;
 
 import io.github.suzanacavalcante.desafio.openapi.Resposta400CorpoInvalido;
 import io.github.suzanacavalcante.desafio.openapi.Resposta404ClienteNaoEncontrado;
+import io.github.suzanacavalcante.desafio.openapi.Resposta503BancoIndisponivel;
 import io.github.suzanacavalcante.desafio.contato.dto.ContatoResponse;
 import io.github.suzanacavalcante.desafio.contato.dto.NovoContatoRequest;
 import io.swagger.v3.oas.annotations.Operation;
@@ -30,6 +31,7 @@ public class ContatoController {
     @ApiResponse(responseCode = "201", description = "Contato criado")
     @Resposta400CorpoInvalido
     @Resposta404ClienteNaoEncontrado
+    @Resposta503BancoIndisponivel
     @PostMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<ContatoResponse> criar(@Valid @RequestBody NovoContatoRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(contatoService.criar(request));

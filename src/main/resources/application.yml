@@ -9,6 +9,11 @@ spring:
     # Sem valores padrão: credenciais vêm do .env ou do ambiente
     username: ${DB_USER}
     password: ${DB_PASSWORD}
+    hikari:
+      # Quanto uma requisição espera por uma conexão antes de desistir (padrão do Hikari: 30 s). Com o banco fora
+      # do ar, 30 s por requisição esgota as threads do Tomcat; 3 s falha rápido e vira 503 com Retry-After.
+      # Folga de sobra para um banco saudável (obter conexão do pool leva milissegundos).
+      connection-timeout: ${DB_CONNECTION_TIMEOUT_MS:3000}
   web:
     # Idioma fixo: as mensagens de validação (Hibernate Validator) saem sempre em português,
     # independentemente do idioma da máquina ou do cabeçalho Accept-Language.

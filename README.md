@@ -115,12 +115,27 @@ Todo erro tratado pelo Spring MVC é um `ProblemDetail` (`application/problem+js
 | `page` ou `size` fora dos limites (`size` acima de 100, `page` acima de 10.000.000) | **400**, com `erros` (parâmetro → mensagem) |
 | Cliente inexistente (`POST /contatos`, `GET /clientes/{id}/contatos`) | **404** |
 | Método ou rota inexistente | **405** / **404** |
+| Banco de dados indisponível | **503** com cabeçalho `Retry-After: 5` (ver abaixo) |
 | Erro inesperado | **500** genérico (o detalhe fica só no log) |
 
 ```json
 {"title":"Dados inválidos","status":400,"detail":"Há campos inválidos na requisição.",
  "instance":"/clientes","erros":{"nome":"não deve estar em branco","contatos[0].email":"deve ser um endereço de e-mail bem formado"}}
 ```
+
+#### Banco fora do ar
+
+Se o banco cair com a aplicação no ar, as rotas que o usam respondem **503** (`application/problem+json`) com `Retry-After: 5`, em vez de esperar e devolver 500:
+
+```json
+{"title":"Serviço indisponível","status":503,"detail":"Serviço temporariamente indisponível. Tente novamente em instantes.","instance":"/clientes"}
+```
+
+- **Rápido:** o `spring.datasource.hikari.connection-timeout` é de **3 s** (variável `DB_CONNECTION_TIMEOUT_MS`), contra os 30 s padrão do Hikari. Com 30 s por requisição, as threads do Tomcat se esgotavam e até rotas que não usam o banco travavam. 3 s sobra para um banco saudável (obter conexão do pool leva milissegundos) e falha depressa quando ele não responde.
+- **Sem vazar nada:** a resposta não traz URL JDBC, host, porta nem SQL; a mensagem do driver e o *stack trace* ficam só no log (nível `ERROR`).
+- **Cobre também a 1ª requisição depois da queda**, que pega uma conexão já morta do pool (a consulta e o rollback falham). Só falhas de conexão viram 503; erro de dados (restrição, SQL) continua 500.
+- **Volta sozinha:** quando o banco volta, o pool recria as conexões e a API responde normalmente, sem reiniciar (o Hikari espera um pouco entre as tentativas, então a volta pode levar alguns segundos, com 503 nesse intervalo).
+- A validação (400) e as rotas que não usam o banco (`/v3/api-docs`, Swagger) continuam respondendo rápido durante a queda. O teste `BancoForaDoArApiTest` derruba e religa o banco (um proxy TCP na frente do PostgreSQL do Testcontainers) e confere tudo isso.
 
 Ficam fora do formato os erros que acontecem **antes** do MVC ou fora dele: URL com percent-encoding inválido (`/clientes/%zz`) e cabeçalhos gigantes (página de erro do Tomcat), `TRACE` e `GET /error` direto (JSON padrão do Spring Boot). As mensagens do próprio Spring MVC (rota inexistente, método não suportado) saem em inglês.
 
@@ -155,7 +170,7 @@ Diagramas (contexto, contêineres, componentes e código) em [docs/arquitetura-c
 ## O que eu faria a seguir
 
 - **Paginação por cursor** (*keyset*, `id > último`) em `GET /clientes`, se a base crescer a ponto de o `OFFSET` pesar ou de a paginação por `page` repetir/pular itens com escritas concorrentes.
-- **Resiliência a queda do banco** (#34): timeout curto de conexão e resposta **503** com `Retry-After`, em vez de 500.
+- **Resiliência a banco lento ou instável**: hoje só a queda total é tratada (503 + `Retry-After`); faltam *circuit breaker* e métricas do pool para evitar enfileirar requisições durante a oscilação.
 - **Operações que faltam ao CRUD**: buscar, atualizar e remover clientes e contatos (o desafio pede só cadastro e consulta); ao remover, a FK já tem `ON DELETE CASCADE`.
 - **Autenticação e autorização** (por exemplo, OAuth2/JWT com Spring Security), e *rate limiting* nas rotas de escrita.
 - **Observabilidade**: Actuator com *health* e métricas, logs estruturados e *correlation id* por requisição.
@@ -204,6 +219,7 @@ Sobe o PostgreSQL, espera o *healthcheck* dele e então sobe a API em `http://lo
 | `DB_PASSWORD` | `postgres` | senha (obrigatória, sem padrão na aplicação) |
 | `DB_PORT` | `5434` | porta no host (evita conflito com PostgreSQL local na 5432) |
 | `DB_HOST` | `localhost` | host do banco |
+| `DB_CONNECTION_TIMEOUT_MS` | `3000` | quanto uma requisição espera por conexão do banco antes de falhar com 503 |
 
 - No `.env`, escreva os valores **sem aspas**, sem `export` e sem comentário na mesma linha (o Compose e o Spring leem o arquivo de formas diferentes). Detalhes no próprio `.env.example`.
 - O banco só é publicado em `127.0.0.1`, não fica acessível pela rede.
