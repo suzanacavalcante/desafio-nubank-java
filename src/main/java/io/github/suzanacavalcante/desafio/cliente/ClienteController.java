@@ -66,7 +66,7 @@ public class ClienteController {
                     + "id). Cliente sem contatos vem com `contatos: []`. A resposta é um envelope com `content`, "
                     + "`page`, `size`, `totalElements` e `totalPages`. `size` vai de 1 a 100 (padrão 20) e `page` de 0 a 10.000.000; fora dos "
                     + "limites a resposta é 400, nunca um corte silencioso. Página além da última devolve "
-                    + "`content: []` com 200.")
+                    + "`content: []` com 200. A ordem é sempre por id: não há `sort`, e parâmetros desconhecidos são ignorados.")
     @ApiResponse(responseCode = "200", description = "Página de clientes (`content` vazio se não houver nenhum)")
     @Resposta400Paginacao
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)

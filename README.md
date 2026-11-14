@@ -71,6 +71,7 @@ curl http://localhost:8080/clientes
 }
 ```
 
+- A ordem é **sempre por id**: não existe `sort` (um `?sort=...` é ignorado, como qualquer parâmetro desconhecido).
 - Uma página além da última responde **200** com `content: []` (e o `totalElements` correto).
 - Valor fora dos limites (inclusive `page` acima de 10.000.000) ou que não é número responde **400** no formato de erro padrão (`erros` diz qual parâmetro).
 - O custo é **constante em consultas**: uma de ids, uma de contagem (dispensada quando a primeira página não está cheia) e uma dos contatos daquela página (`JOIN FETCH`), sem N+1, qualquer que seja o `size`. A paginação é em duas consultas de propósito: com `JOIN FETCH` de coleção o Hibernate paginaria em memória.
