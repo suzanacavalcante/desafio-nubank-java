@@ -15,3 +15,8 @@ updates:
     directory: /
     schedule:
       interval: weekly
+  # imagens do docker-compose.yml (o ecossistema acima só olha o Dockerfile)
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule:
+      interval: weekly
