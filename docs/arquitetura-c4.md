@@ -3,9 +3,9 @@
 API REST de **clientes e contatos** (1 cliente → N contatos), desafio técnico backend.
 Os diagramas usam [Mermaid](https://mermaid.js.org/) (sintaxe C4), então renderizam direto no GitHub (no VS Code, com a extensão Markdown Preview Mermaid Support).
 
-> **Estado documentado:** branch `main` com validação (#10), tratamento global de erros (#11), testes com Testcontainers (#14), Swagger/OpenAPI (#15) e migrations com Flyway (#16) implementados.
+> **Estado documentado:** branch `main` com validação (#10), tratamento global de erros (#11), testes com Testcontainers (#14), Swagger/OpenAPI (#15) e migrations com Flyway (#16) e Dockerfile + Compose (#17) implementados.
 > Itens **ainda não implementados** aparecem marcados como *(planejado)*:
-> Dockerfile (#17), CI (#18), paginação (#29) e resiliência a queda do banco (#34).
+> CI (#18), paginação (#29) e resiliência a queda do banco (#34).
 
 ---
 
@@ -54,7 +54,7 @@ C4Container
 
 | Contêiner | Tecnologia | Responsabilidade |
 |---|---|---|
-| Aplicação Spring Boot | Java 21, Spring Boot 4.1.2, Maven Wrapper, Lombok | API REST, validação, erros em `ProblemDetail`, transações, mapeamento DTO ↔ entidade, persistência com JPA e documentação interativa (Swagger UI). Empacotada como jar (`desafio-nubank-java-0.0.1-SNAPSHOT.jar`). |
+| Aplicação Spring Boot | Java 21, Spring Boot 4.1.2, Maven Wrapper, Lombok | API REST, validação, erros em `ProblemDetail`, transações, mapeamento DTO ↔ entidade, persistência com JPA e documentação interativa (Swagger UI). Empacotada como jar (`desafio-nubank-java-0.0.1-SNAPSHOT.jar`) e como imagem Docker (`Dockerfile` multi-stage: build com JDK 21 + Maven Wrapper, runtime só com o JRE 21, usuário `app` sem privilégios). No Compose é o serviço `app`, que só inicia depois do banco ficar saudável e tem *healthcheck* próprio (`GET /clientes` = 200). |
 | Banco de dados | PostgreSQL 16, imagem oficial, volume `pgdata`, *healthcheck* `pg_isready` | Guarda os dados. O schema é criado pelas migrations do Flyway (`src/main/resources/db/migration`, executadas na subida da aplicação); o Hibernate só o valida (`ddl-auto: validate`). Os testes de integração aplicam as mesmas migrations em um PostgreSQL descartável do Testcontainers. |
 
 ### Configuração e ambientes
@@ -283,7 +283,6 @@ sequenceDiagram
 
 | Issue | Mudança | Impacto no C4 |
 |---|---|---|
-| #17 | Dockerfile + Compose | Aplicação passa a ser contêiner junto com o banco |
 | #18 | GitHub Actions | Novo sistema externo (CI) no nível de contexto |
 | #29 | Paginação em `GET /clientes` | Contrato da listagem muda (parâmetros de página); sem alterar a estrutura de componentes |
 | #34 | Resiliência a queda do banco | Timeout curto e resposta 503 com `Retry-After`, tratados em `config` |

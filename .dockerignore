@@ -1,0 +1,17 @@
+# Fora do contexto de build: segredos, saídas de build e arquivos que não entram na imagem.
+.env
+.env.*
+!.env.example
+.git
+.gitignore
+.gitattributes
+.idea
+.vscode
+*.iml
+target
+HELP.md
+README.md
+docs
+docker-compose.yml
+Dockerfile
+.dockerignore
