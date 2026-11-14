@@ -100,7 +100,7 @@ C4Component
         Component(dto, "DTOs (records)", "Java records", "ClienteRequest/Response, ContatoRequest, NovoContatoRequest, ContatoResponse")
         Component(cfg, "config", "pacote", "ApiExceptionHandler: erros do MVC em ProblemDetail (RFC 7807): 400 com mapa campo→mensagem, 404, 500 genérico")
         Component(val, "validacao", "pacote", "Restrições de Bean Validation reutilizáveis (@SemCaracteresInvalidos); sem dependências do projeto")
-        Component(oas, "Documentação OpenAPI", "springdoc-openapi 3.2.0", "Swagger UI em /swagger-ui.html e documento em /v3/api-docs; os endpoints são descritos por anotações nos controllers e DTOs; o pacote openapi traz título, versão, exemplos e o tipo Problema")
+        Component(oas, "Documentação OpenAPI", "springdoc-openapi 3.2.0", "Swagger UI em /swagger-ui.html e documento em /v3/api-docs; os endpoints são descritos por anotações nos controllers e DTOs; o pacote openapi traz título, versão, exemplos, o tipo Problema e as meta-anotações das respostas de erro (@Resposta400..., @Resposta404...)")
     }
 
     Rel(consumidor, cCtrl, "HTTP/JSON")

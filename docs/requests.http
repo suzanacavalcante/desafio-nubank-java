@@ -1,0 +1,101 @@
+### Coleção de requisições da API de Clientes e Contatos
+###
+### Funciona no VS Code (extensão "REST Client") e no IntelliJ/WebStorm (editor HTTP embutido):
+### abra o arquivo e clique em "Send Request" acima de cada requisição.
+###
+### Pré-requisito: a API no ar em http://localhost:8080 (veja o README: `docker compose up --build`).
+### Rode na ordem. Os ids abaixo pressupõem banco vazio (o id vem da sequência): se já houver
+### dados, ajuste `clienteId` para o id devolvido por "Cria cliente" (campo "id" da resposta).
+
+@host = http://localhost:8080
+@clienteId = 1
+
+### 1. Cria cliente com contatos  ->  201
+POST {{host}}/clientes
+Content-Type: application/json
+
+{
+  "nome": "Maria Silva",
+  "contatos": [
+    { "telefone": "11999990000", "email": "maria@exemplo.com" }
+  ]
+}
+
+### 2. Cria cliente sem contatos  ->  201 (contatos: [])
+POST {{host}}/clientes
+Content-Type: application/json
+
+{
+  "nome": "João Souza"
+}
+
+### 3. Cria contato para um cliente existente  ->  201
+POST {{host}}/contatos
+Content-Type: application/json
+
+{
+  "clienteId": {{clienteId}},
+  "telefone": "11888880000",
+  "email": "outro@exemplo.com"
+}
+
+### 4. Lista todos os clientes com seus contatos  ->  200
+### Atenção: não é paginado (devolve a base inteira); paginação é a issue #29.
+GET {{host}}/clientes
+
+### 5. Lista os contatos de um cliente  ->  200
+GET {{host}}/clientes/{{clienteId}}/contatos
+
+###
+### ---- Erros (todos em application/problem+json, RFC 7807) ----
+###
+
+### 6. Nome em branco e e-mail inválido  ->  400, com "erros" (campo -> mensagem)
+POST {{host}}/clientes
+Content-Type: application/json
+
+{
+  "nome": "",
+  "contatos": [
+    { "telefone": "11999990000", "email": "isto-nao-e-um-email" }
+  ]
+}
+
+### 7. JSON malformado  ->  400
+POST {{host}}/clientes
+Content-Type: application/json
+
+{ "nome": "Sem fechar
+
+### 8. Tipo errado em um campo (clienteId como texto)  ->  400
+POST {{host}}/contatos
+Content-Type: application/json
+
+{
+  "clienteId": "abc",
+  "telefone": "11888880000",
+  "email": "outro@exemplo.com"
+}
+
+### 9. Cliente inexistente ao criar contato  ->  404
+POST {{host}}/contatos
+Content-Type: application/json
+
+{
+  "clienteId": 999999,
+  "telefone": "11888880000",
+  "email": "outro@exemplo.com"
+}
+
+### 10. Cliente inexistente ao listar contatos  ->  404
+GET {{host}}/clientes/999999/contatos
+
+### 11. Id que não é número  ->  400
+GET {{host}}/clientes/abc/contatos
+
+###
+### ---- Documentação ----
+###
+
+### 12. Documento OpenAPI (JSON). A interface interativa está em {{host}}/swagger-ui.html
+GET {{host}}/v3/api-docs
