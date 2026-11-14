@@ -75,8 +75,12 @@ class ClienteRepositoryTest {
         assertEquals(List.of("111", "222"), doBanco.stream().map(Contato::getTelefone).toList());
     }
 
+    private List<Cliente> comContatosDe(List<Cliente> clientes) {
+        return clienteRepository.findComContatosByIdIn(clientes.stream().map(Cliente::getId).toList());
+    }
+
     @Test
-    void findAllComContatosDevolveClienteSemContatosEClienteComContatosSemDuplicar() {
+    void findComContatosByIdInDevolveClienteSemContatosEClienteComContatosSemDuplicar() {
         Cliente semContato = clienteRepository.save(cliente("Sem contato"));
         Cliente comContatos = cliente("Com contatos");
         comContatos.adicionarContato(contato("1", "1@x.com"));
@@ -85,9 +89,7 @@ class ClienteRepositoryTest {
         clienteRepository.save(comContatos);
         limparCache();
 
-        List<Cliente> todos = clienteRepository.findAllComContatos().stream()
-                .filter(c -> c.getId().equals(semContato.getId()) || c.getId().equals(comContatos.getId()))
-                .toList();
+        List<Cliente> todos = comContatosDe(List.of(semContato, comContatos));
 
         assertEquals(2, todos.size(), "LEFT JOIN FETCH não pode duplicar a raiz nem perder cliente sem contato");
         assertTrue(todos.get(0).getContatos().isEmpty());
@@ -95,7 +97,7 @@ class ClienteRepositoryTest {
     }
 
     @Test
-    void findAllComContatosOrdenaClientesEContatosPorId() {
+    void findComContatosByIdInOrdenaClientesEContatosPorId() {
         Cliente primeiro = cliente("Primeiro");
         primeiro.adicionarContato(contato("a", "a@x.com"));
         primeiro.adicionarContato(contato("b", "b@x.com"));
@@ -104,14 +106,42 @@ class ClienteRepositoryTest {
         Cliente segundo = clienteRepository.save(cliente("Segundo"));
         limparCache();
 
-        List<Cliente> resultado = clienteRepository.findAllComContatos().stream()
-                .filter(c -> c.getId().equals(primeiro.getId()) || c.getId().equals(segundo.getId()))
-                .toList();
+        // ids pedidos fora de ordem: a ordem do resultado é a do banco (por id), não a da lista
+        List<Cliente> resultado = clienteRepository.findComContatosByIdIn(List.of(segundo.getId(), primeiro.getId()));
 
         assertEquals(List.of(primeiro.getId(), segundo.getId()), resultado.stream().map(Cliente::getId).toList());
         assertEquals(List.of("a", "b", "c"),
                 resultado.get(0).getContatos().stream().map(Contato::getTelefone).toList());
     }
+
+    @Test
+    void findComContatosByIdInSoTrazOsClientesPedidos() {
+        Cliente a = clienteRepository.save(cliente("A"));
+        clienteRepository.save(cliente("B"));
+        limparCache();
+
+        assertEquals(List.of(a.getId()), comContatosDe(List.of(a)).stream().map(Cliente::getId).toList());
+    }
+
+    @Test
+    void findIdsPaginaPorIdEInformaOTotal() {
+        List<Long> criados = new java.util.ArrayList<>();
+        for (int i = 0; i < 5; i++) {
+            criados.add(clienteRepository.save(cliente("P" + i)).getId());
+        }
+        limparCache();
+        long jaExistiam = clienteRepository.count() - 5;
+
+        var primeira = clienteRepository.findIds(org.springframework.data.domain.PageRequest.of(0, 2));
+        var ultima = clienteRepository.findIds(org.springframework.data.domain.PageRequest.of(
+                (int) ((jaExistiam + 5 - 1) / 2), 2));
+
+        assertEquals(jaExistiam + 5, primeira.getTotalElements());
+        assertEquals(2, primeira.getContent().size());
+        assertEquals(primeira.getContent().stream().sorted().toList(), primeira.getContent(), "ids em ordem crescente");
+        assertTrue(ultima.getContent().contains(criados.get(4)), "o maior id está na última página");
+    }
+
 
     @Test
     void findByClienteIdOrderByIdParaClienteInexistenteDevolveListaVazia() {
@@ -205,26 +235,35 @@ class ClienteRepositoryTest {
         assertThrows(DataIntegrityViolationException.class, () -> clienteRepository.saveAndFlush(emailLongo));
     }
 
-    /** Critério da #14 (review do PR #24): {@code findAllComContatos} é <b>uma</b> consulta, sem N+1. */
+    /**
+     * Critério da #29: a listagem paginada tem número <b>constante</b> de consultas, sem N+1: 1 de ids,
+     * 1 de contagem (página inicial cheia) e 1 dos contatos, qualquer que seja o tamanho da página.
+     */
     @Test
-    void findAllComContatosExecutaUmaUnicaConsultaSql() {
-        for (int i = 0; i < 3; i++) {
+    void paginaDeIdsMaisFetchDosContatosTemNumeroConstanteDeConsultas() {
+        for (int i = 0; i < 6; i++) {
             Cliente c = cliente("Stat" + i);
             for (int j = 0; j < 3; j++) {
                 c.adicionarContato(contato("t" + j, i + "-" + j + "@x.com"));
             }
             clienteRepository.save(c);
         }
-        limparCache();
+        long total = clienteRepository.count();
         Statistics estatisticas = em.getEntityManager().getEntityManagerFactory()
                 .unwrap(SessionFactory.class).getStatistics();
-        estatisticas.clear();
+        for (int tamanho : new int[] {2, 5}) {
+            limparCache();
+            estatisticas.clear();
 
-        List<Cliente> clientes = clienteRepository.findAllComContatos();
-        // percorre as coleções: se fossem LAZY, cada uma dispararia uma consulta (N+1)
-        clientes.forEach(c -> assertEquals(3, c.getContatos().size()));
+            var ids = clienteRepository.findIds(org.springframework.data.domain.PageRequest.of(0, tamanho));
+            List<Cliente> clientes = clienteRepository.findComContatosByIdIn(ids.getContent());
+            // percorre as coleções: se fossem LAZY, cada uma dispararia uma consulta (N+1)
+            clientes.forEach(c -> assertEquals(3, c.getContatos().size()));
 
-        assertEquals(1, estatisticas.getPrepareStatementCount(),
-                "esperava 1 SELECT; houve " + estatisticas.getPrepareStatementCount());
+            assertEquals(tamanho, clientes.size());
+            assertEquals(total >= tamanho ? 3 : 2, estatisticas.getPrepareStatementCount(),
+                    "tamanho " + tamanho + ": esperava ids + contagem + contatos; consultas: "
+                            + java.util.Arrays.toString(estatisticas.getQueries()));
+        }
     }
 }

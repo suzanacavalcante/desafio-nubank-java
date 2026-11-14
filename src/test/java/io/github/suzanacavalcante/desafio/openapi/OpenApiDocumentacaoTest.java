@@ -18,6 +18,7 @@ import java.util.TreeSet;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -84,7 +85,7 @@ class OpenApiDocumentacaoTest {
     @Test
     void cadaEndpointDocumentaSeusCodigosDeResposta() {
         assertEquals(List.of("201", "400"), codigos(operacao("post", "/clientes")));
-        assertEquals(List.of("200"), codigos(operacao("get", "/clientes")));
+        assertEquals(List.of("200", "400"), codigos(operacao("get", "/clientes")));
         assertEquals(List.of("201", "400", "404"), codigos(operacao("post", "/contatos")));
         assertEquals(List.of("200", "400", "404"), codigos(operacao("get", "/clientes/{id}/contatos")));
     }
@@ -102,7 +103,7 @@ class OpenApiDocumentacaoTest {
     @Test
     void respostasDeErroUsamProblemJsonComExemploESchemaProblema() {
         for (String[] ep : new String[][] {{"post", "/clientes", "400"}, {"post", "/contatos", "400"},
-                {"post", "/contatos", "404"}, {"get", "/clientes/{id}/contatos", "400"},
+                {"post", "/contatos", "404"}, {"get", "/clientes", "400"}, {"get", "/clientes/{id}/contatos", "400"},
                 {"get", "/clientes/{id}/contatos", "404"}}) {
             JsonNode conteudo = operacao(ep[0], ep[1]).path("responses").path(ep[2]).path("content").path(PROBLEM_JSON);
             String onde = ep[0] + " " + ep[1] + " " + ep[2];
@@ -185,6 +186,55 @@ class OpenApiDocumentacaoTest {
 
         assertEquals(chaves(exemplo), chaves(resposta));
         assertEquals(exemplo.path("detail").asString(), resposta.path("detail").asString());
+    }
+
+    @Test
+    void exemploDeParametroDePaginacaoInvalidoConfereComARespostaReal() throws Exception {
+        String real = mockMvc.perform(get("/clientes").param("size", "101"))
+                .andExpect(status().isBadRequest())
+                .andExpect(header().string("Content-Type", org.hamcrest.Matchers.startsWith(PROBLEM_JSON)))
+                .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
+
+        JsonNode exemplo = JSON.readTree(ExemplosDeErro.PAGINACAO_400);
+        JsonNode resposta = JSON.readTree(real);
+
+        assertEquals(chaves(exemplo), chaves(resposta));
+        assertEquals(chaves(exemplo.path("erros")), chaves(resposta.path("erros")));
+        assertEquals(exemplo.path("erros").path("size").asString(), resposta.path("erros").path("size").asString());
+        assertEquals(exemplo.path("instance").asString(), resposta.path("instance").asString());
+    }
+
+    /** Os parâmetros e limites da paginação aparecem no documento, com os valores que a API realmente aplica. */
+    @Test
+    void listagemDocumentaPageESizeComPadroesELimites() {
+        JsonNode parametros = operacao("get", "/clientes").path("parameters");
+        JsonNode page = null;
+        JsonNode size = null;
+        for (JsonNode p : parametros) {
+            if ("page".equals(p.path("name").asString())) {
+                page = p;
+            } else if ("size".equals(p.path("name").asString())) {
+                size = p;
+            }
+        }
+        assertNotNull(page, "parâmetro page");
+        assertNotNull(size, "parâmetro size");
+        assertEquals("query", page.path("in").asString());
+        assertEquals(0, page.path("schema").path("default").asInt(-1));
+        assertEquals(0, page.path("schema").path("minimum").asInt(-1));
+        assertEquals(10_000_000, page.path("schema").path("maximum").asInt(-1));
+        assertEquals(20, size.path("schema").path("default").asInt(-1));
+        assertEquals(1, size.path("schema").path("minimum").asInt(-1));
+        assertEquals(100, size.path("schema").path("maximum").asInt(-1));
+    }
+
+    @Test
+    void listagemDocumentaOEnvelopeDaPagina() {
+        String ref = operacao("get", "/clientes").path("responses").path("200").path("content")
+                .path("application/json").path("schema").path("$ref").asString();
+        assertTrue(ref.endsWith("/PaginaDeClientes"), ref);
+        JsonNode propriedades = doc.path("components").path("schemas").path("PaginaDeClientes").path("properties");
+        assertEquals(List.of("content", "page", "size", "totalElements", "totalPages"), chaves(propriedades));
     }
 
     @Test

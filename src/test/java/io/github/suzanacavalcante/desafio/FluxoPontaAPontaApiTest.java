@@ -75,7 +75,12 @@ class FluxoPontaAPontaApiTest {
         enviar(postar("/clientes", "{\"nome\":\"Joao\"}"), 201);
 
         // 3) lista tudo: os dois clientes, na ordem, cada um com seus contatos
-        JsonNode lista = enviar(get("/clientes"), 200);
+        JsonNode pagina = enviar(get("/clientes"), 200);
+        assertEquals(2, pagina.get("totalElements").asLong());
+        assertEquals(1, pagina.get("totalPages").asInt());
+        assertEquals(0, pagina.get("page").asInt());
+        assertEquals(20, pagina.get("size").asInt());
+        JsonNode lista = pagina.get("content");
         assertEquals(2, lista.size());
         assertEquals("Maria", lista.get(0).get("nome").asString());
         assertEquals(2, lista.get(0).get("contatos").size());

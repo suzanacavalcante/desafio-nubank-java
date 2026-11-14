@@ -2,10 +2,13 @@ package io.github.suzanacavalcante.desafio.cliente;
 
 import io.github.suzanacavalcante.desafio.cliente.dto.ClienteRequest;
 import io.github.suzanacavalcante.desafio.cliente.dto.ClienteResponse;
+import io.github.suzanacavalcante.desafio.cliente.dto.PaginaDeClientes;
 import io.github.suzanacavalcante.desafio.contato.ContatoMapper;
 import io.github.suzanacavalcante.desafio.contato.ContatoRepository;
 import io.github.suzanacavalcante.desafio.contato.dto.ContatoResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,28 +36,32 @@ public class ClienteService {
     }
 
     /**
-     * Lista todos os clientes com seus contatos, em uma única consulta principal
-     * ({@link ClienteRepository#findAllComContatos()}, com {@code JOIN FETCH}). Clientes sem contatos
-     * vêm com lista vazia; clientes e contatos saem ordenados por id.
+     * Lista uma página de clientes com seus contatos, em <b>duas consultas</b> (mais a contagem total quando
+     * a página inicial está cheia), em número constante: sem N+1 e sem crescer com o tamanho da página:
+     * <ol>
+     *   <li>{@link ClienteRepository#findIds}: os ids da página, por ordem de id;</li>
+     *   <li>{@link ClienteRepository#findComContatosByIdIn}: esses clientes com os contatos
+     *       ({@code JOIN FETCH}), preservando a ordem. Se a página está vazia, esta consulta nem acontece.</li>
+     * </ol>
+     * Clientes sem contatos vêm com lista vazia; clientes e contatos saem ordenados por id.
      * <p>
      * A conversão para {@link ClienteResponse} acontece <b>dentro</b> da transação; a coleção já vem
-     * carregada, então o mapeamento não dispara consultas extras.
+     * carregada, então o mapeamento não dispara consultas extras. {@code readOnly = true} dá só o modo
+     * somente leitura (sem dirty checking nem flush); quem protege contra
+     * {@code LazyInitializationException} é o {@code JOIN FETCH}.
      * <p>
-     * O que {@code @Transactional(readOnly = true)} dá aqui é só o modo somente leitura (sem dirty
-     * checking nem flush). Não é ela que protege contra {@code LazyInitializationException}: o
-     * {@code JOIN FETCH} já traz a coleção. Se a consulta for trocada por uma sem {@code JOIN FETCH},
-     * a transação passa a ser necessária de verdade.
-     * <p>
-     * Sem paginação: a resposta traz a base inteira e cresce linearmente (medição de QA, nov/2026:
-     * ~8 MB para 20 mil clientes com 5 contatos cada). Paginar é pré-requisito para uso com volume real
-     * (issue de paginação do backlog); o motivo de não paginar hoje está no Javadoc de
-     * {@link ClienteRepository#findAllComContatos()}.
+     * Os limites de {@code page} e {@code size} são validados no controller; aqui valem as regras do
+     * {@link PageRequest} ({@code size >= 1}, {@code page >= 0}).
      */
     @Transactional(readOnly = true)
-    public List<ClienteResponse> listar() {
-        return clienteRepository.findAllComContatos().stream()
-                .map(ClienteMapper::toResponse)
-                .toList();
+    public PaginaDeClientes listar(int page, int size) {
+        Page<Long> ids = clienteRepository.findIds(PageRequest.of(page, size));
+        List<ClienteResponse> clientes = ids.isEmpty()
+                ? List.of()
+                : clienteRepository.findComContatosByIdIn(ids.getContent()).stream()
+                        .map(ClienteMapper::toResponse)
+                        .toList();
+        return new PaginaDeClientes(clientes, ids.getNumber(), ids.getSize(), ids.getTotalElements(), ids.getTotalPages());
     }
 
     /**

@@ -3,9 +3,9 @@
 API REST de **clientes e contatos** (1 cliente → N contatos), desafio técnico backend.
 Os diagramas usam [Mermaid](https://mermaid.js.org/) (sintaxe C4), então renderizam direto no GitHub (no VS Code, com a extensão Markdown Preview Mermaid Support).
 
-> **Estado documentado:** branch `main` com validação (#10), tratamento global de erros (#11), testes com Testcontainers (#14), Swagger/OpenAPI (#15), migrations com Flyway (#16), Dockerfile + Compose (#17) e integração contínua (#18) implementados.
+> **Estado documentado:** branch `main` com validação (#10), tratamento global de erros (#11), testes com Testcontainers (#14), Swagger/OpenAPI (#15), migrations com Flyway (#16), Dockerfile + Compose (#17) e integração contínua (#18) e paginação de `GET /clientes` (#29) implementados.
 > Itens **ainda não implementados** aparecem marcados como *(planejado)*:
-> Paginação (#29) e resiliência a queda do banco (#34).
+> Resiliência a queda do banco (#34).
 
 ---
 
@@ -83,7 +83,7 @@ C4Component
         Boundary(fCliente, "Feature cliente") {
             Component(cCtrl, "ClienteController", "@RestController /clientes", "POST /clientes, GET /clientes, GET /clientes/{id}/contatos")
             Component(cSvc, "ClienteService", "@Service", "Criar, listar e consultar contatos de um cliente")
-            Component(cRepo, "ClienteRepository", "Spring Data JPA", "save, existsById, findAllComContatos (JOIN FETCH)")
+            Component(cRepo, "ClienteRepository", "Spring Data JPA", "save, existsById, findIds (página de ids), findComContatosByIdIn (JOIN FETCH)")
             Component(cMap, "ClienteMapper", "Classe utilitária", "ClienteRequest → Cliente; Cliente → ClienteResponse")
             Component(cEnt, "Cliente", "@Entity clientes", "Raiz do agregado. Gerencia a coleção de contatos")
             Component(cExc, "ClienteNaoEncontradoException", "RuntimeException", "Sinaliza cliente inexistente")
@@ -143,7 +143,7 @@ C4Component
 | `ContatoController` | Camada web de `/contatos`. | `POST` devolve **201**; `clienteId` vem no corpo. |
 | `ClienteService` | Casos de uso de cliente. | `criar` é `@Transactional`; `listar` e `contatosDoCliente` são `readOnly`. Cliente inexistente → `ClienteNaoEncontradoException`. |
 | `ContatoService` | Caso de uso de criação de contato. | Busca o cliente com `findById`, associa e salva, mapeia dentro da transação. |
-| `ClienteRepository` | Acesso a `clientes`. | `findAllComContatos` usa `left join fetch` ordenado por `c.id, ct.id` (evita N+1). |
+| `ClienteRepository` | Acesso a `clientes`. | Listagem paginada em duas consultas: `findIds` (só os ids da página, por id) e `findComContatosByIdIn` (`left join fetch` ordenado por `c.id, ct.id`, evita N+1). |
 | `ContatoRepository` | Acesso a `contatos`. | `findByClienteIdOrderById` garante ordem estável. |
 | `ClienteMapper` / `ContatoMapper` | Conversão DTO ↔ entidade. | `ContatoMapper.toEntity` **não** associa o cliente; quem associa é o service ou `Cliente.adicionarContato`. |
 | `Cliente` | Raiz do agregado. | `getContatos()` é somente leitura; alterações via `adicionarContato` (idempotente; rejeita contato de outro cliente) e `removerContato`. Limite de `nome`: 150. |
@@ -246,14 +246,18 @@ sequenceDiagram
     participant CR as ClienteRepository
     participant DB as PostgreSQL
 
-    C->>CC: GET /clientes
-    CC->>CS: listar()
+    C->>CC: GET /clientes?page=0&size=20
+    Note over CC: valida 0 <= page <= 10.000.000 e 1 <= size <= 100 (senão 400)
+    CC->>CS: listar(page, size)
     Note over CS: @Transactional(readOnly)
-    CS->>CR: findAllComContatos()
-    CR->>DB: SELECT ... LEFT JOIN FETCH (1 consulta, sem N+1)
+    CS->>CR: findIds(PageRequest)
+    CR->>DB: SELECT id ... ORDER BY id LIMIT/OFFSET (+ COUNT se a página estiver cheia)
+    CS->>CR: findComContatosByIdIn(ids)
+    CR->>DB: SELECT ... LEFT JOIN FETCH WHERE id IN (...) (1 consulta, sem N+1)
     DB-->>CR: linhas
     CS->>CS: ClienteMapper.toResponse (coleção já carregada)
-    CS-->>CC: List<ClienteResponse>
+    CS-->>CC: PaginaDeClientes
+
     CC-->>C: 200 OK
 ```
 
@@ -267,7 +271,7 @@ sequenceDiagram
 | `Cliente` como **raiz do agregado** | Coleção encapsulada (lista imutável) e invariantes em `adicionarContato`/`removerContato`. |
 | **DTOs em `record`**, sem expor entidades | Evita `LazyInitializationException` na serialização e recursão JSON cliente↔contato. |
 | `open-in-view: false` + mapeamento no service | Acesso preguiçoso só dentro da transação; falha cedo se alguém mapear fora. |
-| `JOIN FETCH` na listagem | Uma consulta em vez de N+1 (ver a ressalva: sem paginação, o custo cresce com o volume). |
+| Paginação em duas consultas (ids + `JOIN FETCH`) | `JOIN FETCH` de coleção com `Pageable` paginaria em memória; buscar os ids da página primeiro mantém o `LIMIT` no banco e o número de consultas constante (sem N+1). `size` máximo 100: acima é 400. Envelope próprio (`PaginaDeClientes`), não o `Page` do Spring. |
 | Flyway + `ddl-auto: validate` | O schema tem uma única origem versionada (as migrations, as mesmas em dev, testes e produção); o Hibernate falha na subida se as entidades divergirem dela. FK com `ON DELETE CASCADE` e índice em `contatos.cliente_id`. |
 | Erros em `ProblemDetail` (RFC 7807) | Formato padrão e único; sem stack trace e sem ecoar o valor rejeitado. |
 | springdoc-openapi 3.2.0 | Série compatível com o Spring Boot 4.1; documentação por anotações nos controllers e DTOs. |
@@ -284,5 +288,4 @@ sequenceDiagram
 
 | Issue | Mudança | Impacto no C4 |
 |---|---|---|
-| #29 | Paginação em `GET /clientes` | Contrato da listagem muda (parâmetros de página); sem alterar a estrutura de componentes |
 | #34 | Resiliência a queda do banco | Timeout curto e resposta 503 com `Retry-After`, tratados em `config` |

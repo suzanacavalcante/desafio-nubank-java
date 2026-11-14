@@ -2,6 +2,7 @@ package io.github.suzanacavalcante.desafio.cliente;
 
 import io.github.suzanacavalcante.desafio.cliente.dto.ClienteRequest;
 import io.github.suzanacavalcante.desafio.cliente.dto.ClienteResponse;
+import io.github.suzanacavalcante.desafio.cliente.dto.PaginaDeClientes;
 import io.github.suzanacavalcante.desafio.contato.Contato;
 import io.github.suzanacavalcante.desafio.contato.ContatoRepository;
 import io.github.suzanacavalcante.desafio.contato.dto.ContatoRequest;
@@ -13,6 +14,10 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
@@ -144,42 +149,73 @@ class ClienteServiceTest {
         return cliente;
     }
 
+    private static Page<Long> paginaDeIds(List<Long> ids, int page, int size, long total) {
+        return new PageImpl<>(ids, PageRequest.of(page, size), total);
+    }
+
     @Test
-    void listarConverteCadaClienteComSeusContatosPreservandoAOrdem() {
-        when(clienteRepository.findAllComContatos()).thenReturn(List.of(
+    void listarConverteCadaClienteComSeusContatosPreservandoAOrdemEMontaOEnvelope() {
+        when(clienteRepository.findIds(PageRequest.of(1, 3))).thenReturn(paginaDeIds(List.of(1L, 2L, 3L), 1, 3, 7));
+        when(clienteRepository.findComContatosByIdIn(List.of(1L, 2L, 3L))).thenReturn(List.of(
                 clienteComContatos(1L, "Ana", 10L, 11L),
                 clienteComContatos(2L, "Bia"),
                 clienteComContatos(3L, "Caio", 12L)));
 
-        List<ClienteResponse> resposta = service.listar();
+        PaginaDeClientes pagina = service.listar(1, 3);
 
+        List<ClienteResponse> resposta = pagina.content();
         assertEquals(List.of("Ana", "Bia", "Caio"), resposta.stream().map(ClienteResponse::nome).toList());
         assertEquals(List.of(10L, 11L), resposta.get(0).contatos().stream().map(ContatoResponse::id).toList());
         assertEquals(3L, resposta.get(2).id());
         resposta.get(0).contatos().forEach(c -> assertEquals(1L, c.clienteId()));
+        assertEquals(1, pagina.page());
+        assertEquals(3, pagina.size());
+        assertEquals(7, pagina.totalElements());
+        assertEquals(3, pagina.totalPages());
     }
 
     @Test
     void listarClienteSemContatosDevolveListaVaziaNaoNula() {
-        when(clienteRepository.findAllComContatos()).thenReturn(List.of(clienteComContatos(1L, "Ana")));
+        when(clienteRepository.findIds(any(Pageable.class))).thenReturn(paginaDeIds(List.of(1L), 0, 20, 1));
+        when(clienteRepository.findComContatosByIdIn(List.of(1L))).thenReturn(List.of(clienteComContatos(1L, "Ana")));
 
-        assertTrue(service.listar().get(0).contatos().isEmpty());
+        assertTrue(service.listar(0, 20).content().get(0).contatos().isEmpty());
     }
 
     @Test
-    void listarSemClientesDevolveListaVazia() {
-        when(clienteRepository.findAllComContatos()).thenReturn(List.of());
+    void listarPaginaVaziaNaoConsultaOsContatos() {
+        when(clienteRepository.findIds(any(Pageable.class))).thenReturn(paginaDeIds(List.of(), 5, 20, 3));
 
-        assertTrue(service.listar().isEmpty());
+        PaginaDeClientes pagina = service.listar(5, 20);
+
+        assertTrue(pagina.content().isEmpty());
+        assertEquals(3, pagina.totalElements());
+        verify(clienteRepository, never()).findComContatosByIdIn(any());
     }
 
     @Test
-    void listarUsaApenasFindAllComContatos() {
-        when(clienteRepository.findAllComContatos()).thenReturn(List.of());
+    void listarSemNenhumClienteDevolveEnvelopeVazio() {
+        when(clienteRepository.findIds(any(Pageable.class))).thenReturn(paginaDeIds(List.of(), 0, 20, 0));
 
-        service.listar();
+        PaginaDeClientes pagina = service.listar(0, 20);
 
-        verify(clienteRepository).findAllComContatos();
+        assertTrue(pagina.content().isEmpty());
+        assertEquals(0, pagina.totalElements());
+        assertEquals(0, pagina.totalPages());
+    }
+
+    @Test
+    void listarUsaApenasAsDuasConsultasDaPaginacaoEPassaPageESizeAoRepositorio() {
+        when(clienteRepository.findIds(any(Pageable.class))).thenReturn(paginaDeIds(List.of(4L), 2, 10, 21));
+        when(clienteRepository.findComContatosByIdIn(List.of(4L))).thenReturn(List.of(clienteComContatos(4L, "Duda")));
+
+        service.listar(2, 10);
+
+        ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
+        verify(clienteRepository).findIds(captor.capture());
+        assertEquals(2, captor.getValue().getPageNumber());
+        assertEquals(10, captor.getValue().getPageSize());
+        verify(clienteRepository).findComContatosByIdIn(List.of(4L));
         verifyNoMoreInteractions(clienteRepository);
     }
 
