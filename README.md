@@ -2,39 +2,86 @@
 
 [![CI](https://github.com/suzanacavalcante/desafio-nubank-java/actions/workflows/ci.yml/badge.svg)](https://github.com/suzanacavalcante/desafio-nubank-java/actions/workflows/ci.yml)
 
-API REST de **clientes e contatos** (1 cliente → N contatos), feita com **Java 21**, **Spring Boot 4.1** e **PostgreSQL**.
+API REST de **clientes e contatos** (1 cliente → N contatos), feita como solução do desafio técnico de backend do Nubank: estruturar uma API REST com boas práticas, relacionamento entre entidades e persistência em PostgreSQL.
 
-> README em evolução. A versão final (CI, exemplos completos) vem na issue #19.
+## Visão geral
 
-## Funcionalidades
+- Cadastro de clientes (com ou sem contatos), de contatos para um cliente existente e consultas.
+- Validação de entrada, erros padronizados em `ProblemDetail` (RFC 7807) e documentação interativa (Swagger).
+- Schema versionado com Flyway, testes com PostgreSQL descartável (Testcontainers), CI no GitHub Actions e Docker Compose para subir tudo com um comando.
 
-| Método | Rota | Descrição | Sucesso |
-|---|---|---|---|
-| POST | `/clientes` | Cria cliente, com ou sem contatos | 201 |
-| POST | `/contatos` | Cria contato para um cliente existente (`clienteId` no corpo) | 201 |
-| GET | `/clientes` | Lista clientes com seus contatos | 200 |
-| GET | `/clientes/{id}/contatos` | Lista os contatos de um cliente | 200 |
+### Stack
 
-### Documentação interativa (Swagger/OpenAPI)
+| Camada | Tecnologia |
+|---|---|
+| Linguagem / runtime | Java 21 |
+| Framework | Spring Boot 4.1 (Spring MVC, Spring Data JPA, Bean Validation) |
+| Banco | PostgreSQL 16, migrations com Flyway |
+| Documentação da API | springdoc-openapi 3.2.0 (Swagger UI) |
+| Testes | JUnit 5, Mockito, `@WebMvcTest`, `@DataJpaTest`, Testcontainers |
+| Build / entrega | Maven Wrapper, Dockerfile *multi-stage*, Docker Compose, GitHub Actions |
 
-Com a aplicação no ar: **http://localhost:8080/swagger-ui.html** lista os 4 endpoints com exemplos de corpo e os códigos de resposta (inclusive os erros 400 e 404 no formato `ProblemDetail`). O documento OpenAPI em JSON está em `/v3/api-docs`. Usa o springdoc-openapi **3.2.0**, a série compatível com o Spring Boot 4.1 (a 2.x é para o Boot 3).
+## Começando em 5 minutos
 
-### Exemplos
+Pré-requisito: **só o Docker** (com Docker Compose). Não precisa de JDK nem de `.env`.
 
 ```bash
-# Criar cliente com contatos (os exemplos com id 1 pressupõem banco vazio: o id vem da sequência)
+git clone https://github.com/suzanacavalcante/desafio-nubank-java.git
+cd desafio-nubank-java
+docker compose up --build
+```
+
+Quando o log mostrar `Started DesafioNubankJavaApplication`, a API está em **http://localhost:8080**:
+
+```bash
+# cria um cliente com um contato
 curl -X POST http://localhost:8080/clientes -H "Content-Type: application/json" \
   -d '{"nome":"Maria","contatos":[{"telefone":"11999990000","email":"maria@exemplo.com"}]}'
 
-# Criar contato para o cliente 1
+# lista os clientes com seus contatos
+curl http://localhost:8080/clientes
+```
+
+- **Swagger UI:** http://localhost:8080/swagger-ui.html (os 4 endpoints, com exemplos e códigos de resposta).
+- **Coleção de requisições:** [docs/requests.http](docs/requests.http) (VS Code com a extensão REST Client, ou IntelliJ): todas as chamadas abaixo, mais os casos de erro.
+- Para rodar a aplicação direto na máquina (com JDK 21), veja [Como rodar em desenvolvimento](#como-rodar-em-desenvolvimento); para os testes, [Testes](#testes).
+
+## API
+
+| Método | Rota | Descrição | Sucesso | Erros |
+|---|---|---|---|---|
+| POST | `/clientes` | Cria cliente, com ou sem contatos | 201 | 400 |
+| POST | `/contatos` | Cria contato para um cliente existente (`clienteId` no corpo) | 201 | 400, 404 |
+| GET | `/clientes` | Lista clientes com seus contatos | 200 | |
+| GET | `/clientes/{id}/contatos` | Lista os contatos de um cliente | 200 | 400, 404 |
+
+> **`GET /clientes` não é paginado.** A resposta traz a base inteira (o review do PR #28 estimou ~8 MB para 20 mil clientes). A paginação é a evolução prevista na issue [#29](https://github.com/suzanacavalcante/desafio-nubank-java/issues/29); até lá, não use esse endpoint com volumes grandes.
+
+### Exemplos
+
+Os exemplos com id 1 pressupõem banco vazio (o id vem da sequência). Os `curl` são para Bash; no PowerShell use `Invoke-RestMethod` (ou `curl.exe` com o JSON em um arquivo, `-d @corpo.json`), ou o [docs/requests.http](docs/requests.http).
+
+```bash
+# Criar cliente com contatos  ->  201
+curl -X POST http://localhost:8080/clientes -H "Content-Type: application/json" \
+  -d '{"nome":"Maria","contatos":[{"telefone":"11999990000","email":"maria@exemplo.com"}]}'
+# {"id":1,"nome":"Maria","contatos":[{"id":1,"telefone":"11999990000","email":"maria@exemplo.com","clienteId":1}]}
+
+# Criar cliente sem contatos  ->  201 (contatos: [])
+curl -X POST http://localhost:8080/clientes -H "Content-Type: application/json" -d '{"nome":"João"}'
+
+# Criar contato para o cliente 1  ->  201
 curl -X POST http://localhost:8080/contatos -H "Content-Type: application/json" \
   -d '{"clienteId":1,"telefone":"11888880000","email":"outro@exemplo.com"}'
 
-# Listar clientes com contatos
+# Listar clientes com contatos  ->  200
 curl http://localhost:8080/clientes
 
-# Contatos do cliente 1
+# Contatos do cliente 1  ->  200
 curl http://localhost:8080/clientes/1/contatos
+
+# Cliente inexistente  ->  404 (application/problem+json)
+curl -i http://localhost:8080/clientes/999/contatos
 ```
 
 ### Erros
@@ -68,16 +115,31 @@ Ficam fora do formato os erros que acontecem **antes** do MVC ou fora dele: URL 
 
 `nome` e `telefone` também não aceitam o caractere NUL nem surrogate UTF-16 solto. Os tamanhos contam unidades UTF-16 (um emoji conta 2).
 
-### Limitações atuais
+## Decisões de design
 
-Ainda **não** implementados (planejados nas issues):
+| Decisão | Por quê |
+|---|---|
+| **Pacotes por feature** (`cliente`, `contato`) em vez de por camada | Cada feature carrega seu controller, service, repository, mapper e DTOs: o que muda junto fica junto, e dá para entender uma feature abrindo uma pasta. Pacotes transversais só para o que é compartilhado: `config` (erros), `validacao` e `openapi`. |
+| **DTOs em `record`**, a API nunca expõe entidades | Evita `LazyInitializationException` na serialização, recursão JSON cliente ↔ contato e vazamento do modelo de persistência para o contrato. O contrato da API muda só quando o DTO muda. |
+| `open-in-view: false` e mapeamento para DTO **dentro** da transação do service | Acesso preguiçoso só onde há transação; se alguém mapear fora, falha cedo em vez de gerar consultas escondidas na camada web. |
+| `JOIN FETCH` na listagem | Uma consulta em vez de N+1. O custo é a resposta inteira em memória: por isso a paginação (#29) é a evolução natural. |
+| **404** (e não 400) para cliente inexistente | O recurso referenciado não existe: o erro não é de formato da requisição (400), é de recurso ausente. Vale também para `POST /contatos`, em que o `clienteId` está no corpo, mantendo uma regra única: *id de cliente que não existe → 404*. 400 fica para requisição malformada ou inválida. |
+| Erros em **`ProblemDetail`** (RFC 7807), sem stack trace nem eco do valor rejeitado | Formato padrão e único para todos os erros, que o cliente da API consegue tratar de forma genérica; nada sensível vaza. |
+| **Flyway** + `ddl-auto: validate` | O schema é versionado e reproduzível; o Hibernate só confere que as entidades batem com ele. |
+| Credenciais **sem valor padrão** na aplicação | Segredos vêm do `.env` ou do ambiente, nunca do código. |
+| Testes com **Testcontainers** | Rodam contra um PostgreSQL de verdade e descartável, sem depender de banco local, do Compose nem do `.env`. |
 
-- Paginação em `GET /clientes` (#29)
-- Resiliência a queda do banco: timeout curto e 503 com `Retry-After` (#34)
+Diagramas (contexto, contêineres, componentes e código) em [docs/arquitetura-c4.md](docs/arquitetura-c4.md) (modelo C4).
 
-## Arquitetura
+## O que eu faria a seguir
 
-Organizada **por feature** (`cliente`, `contato`, mais os pacotes transversais `config`, `validacao` e `openapi`) em camadas Controller → Service → Repository, com DTOs em `record` e mapeamento dentro da transação (`open-in-view: false`). Detalhes e diagramas em [docs/arquitetura-c4.md](docs/arquitetura-c4.md) (modelo C4).
+- **Paginação** em `GET /clientes` (#29), com ordenação estável e limite de página máximo; ajustar o *healthcheck* do Compose, que hoje lê a tabela inteira.
+- **Resiliência a queda do banco** (#34): timeout curto de conexão e resposta **503** com `Retry-After`, em vez de 500.
+- **Operações que faltam ao CRUD**: buscar, atualizar e remover clientes e contatos (o desafio pede só cadastro e consulta); ao remover, a FK já tem `ON DELETE CASCADE`.
+- **Autenticação e autorização** (por exemplo, OAuth2/JWT com Spring Security), e *rate limiting* nas rotas de escrita.
+- **Observabilidade**: Actuator com *health* e métricas, logs estruturados e *correlation id* por requisição.
+- **Separar o usuário de migration do de execução** (permissão de DDL só para o Flyway) e proteger o `/swagger-ui.html` e o `/v3/api-docs` fora de desenvolvimento.
+- **Microsserviços**: só se o domínio crescer a ponto de justificar. Hoje clientes e contatos formam um único agregado (`Cliente` é a raiz), com transação e consistência simples; dividir agora trocaria isso por chamadas de rede e consistência eventual sem ganho.
 
 ## Como rodar em desenvolvimento
 
