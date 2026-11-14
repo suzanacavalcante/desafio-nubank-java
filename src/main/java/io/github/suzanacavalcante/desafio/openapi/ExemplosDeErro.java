@@ -29,6 +29,17 @@ public final class ExemplosDeErro {
               "instance": "/contatos"
             }""";
 
+    public static final String PAGINACAO_400 = """
+            {
+              "title": "Dados inválidos",
+              "status": 400,
+              "detail": "Há campos inválidos na requisição.",
+              "instance": "/clientes",
+              "erros": {
+                "size": "deve ser menor que ou igual à 100"
+              }
+            }""";
+
     public static final String ID_INVALIDO_400 = """
             {
               "title": "Parâmetro inválido",

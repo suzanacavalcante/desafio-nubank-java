@@ -2,6 +2,7 @@ package io.github.suzanacavalcante.desafio.cliente;
 
 import io.github.suzanacavalcante.desafio.cliente.dto.ClienteRequest;
 import io.github.suzanacavalcante.desafio.cliente.dto.ClienteResponse;
+import io.github.suzanacavalcante.desafio.cliente.dto.PaginaDeClientes;
 import io.github.suzanacavalcante.desafio.contato.dto.ContatoRequest;
 import io.github.suzanacavalcante.desafio.contato.dto.ContatoResponse;
 import org.junit.jupiter.api.Test;
@@ -20,6 +21,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -87,29 +89,135 @@ class ClienteControllerTest {
                 .andExpect(status().isCreated());
     }
 
-    @Test
-    void listarRetorna200ComClientesEContatos() throws Exception {
-        when(service.listar()).thenReturn(List.of(
-                new ClienteResponse(1L, "Ana", List.of(new ContatoResponse(10L, "48123", "a@x.com", 1L))),
-                new ClienteResponse(2L, "Bia", List.of())));
-
-        mockMvc.perform(get("/clientes"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(2))
-                .andExpect(jsonPath("$[0].nome").value("Ana"))
-                .andExpect(jsonPath("$[0].contatos[0].telefone").value("48123"))
-                .andExpect(jsonPath("$[0].contatos[0].clienteId").value(1))
-                .andExpect(jsonPath("$[1].contatos").isArray())
-                .andExpect(jsonPath("$[1].contatos").isEmpty());
+    private static PaginaDeClientes pagina(List<ClienteResponse> clientes, int page, int size, long total, int paginas) {
+        return new PaginaDeClientes(clientes, page, size, total, paginas);
     }
 
     @Test
-    void listarSemClientesRetorna200ComListaVazia() throws Exception {
-        when(service.listar()).thenReturn(List.of());
+    void listarRetorna200ComOEnvelopeEOsClientesComContatos() throws Exception {
+        when(service.listar(0, 20)).thenReturn(pagina(List.of(
+                new ClienteResponse(1L, "Ana", List.of(new ContatoResponse(10L, "48123", "a@x.com", 1L))),
+                new ClienteResponse(2L, "Bia", List.of())), 0, 20, 2, 1));
 
         mockMvc.perform(get("/clientes"))
                 .andExpect(status().isOk())
-                .andExpect(content().json("[]"));
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(20))
+                .andExpect(jsonPath("$.totalElements").value(2))
+                .andExpect(jsonPath("$.totalPages").value(1))
+                .andExpect(jsonPath("$.content.length()").value(2))
+                .andExpect(jsonPath("$.content[0].nome").value("Ana"))
+                .andExpect(jsonPath("$.content[0].contatos[0].telefone").value("48123"))
+                .andExpect(jsonPath("$.content[0].contatos[0].clienteId").value(1))
+                .andExpect(jsonPath("$.content[1].contatos").isArray())
+                .andExpect(jsonPath("$.content[1].contatos").isEmpty());
+    }
+
+    @Test
+    void listarSemClientesRetorna200ComContentVazio() throws Exception {
+        when(service.listar(0, 20)).thenReturn(pagina(List.of(), 0, 20, 0, 0));
+
+        mockMvc.perform(get("/clientes"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content").isArray())
+                .andExpect(jsonPath("$.content").isEmpty())
+                .andExpect(jsonPath("$.totalElements").value(0))
+                .andExpect(jsonPath("$.totalPages").value(0));
+    }
+
+    @Test
+    void listarSemParametrosUsaPagina0ETamanho20() throws Exception {
+        when(service.listar(0, 20)).thenReturn(pagina(List.of(), 0, 20, 0, 0));
+
+        mockMvc.perform(get("/clientes")).andExpect(status().isOk());
+
+        verify(service).listar(0, 20);
+        assertEquals(20, ClienteController.TAMANHO_PADRAO);
+    }
+
+    @Test
+    void listarRepassaPageESizeInformados() throws Exception {
+        when(service.listar(3, 10)).thenReturn(pagina(List.of(), 3, 10, 0, 0));
+
+        mockMvc.perform(get("/clientes").param("page", "3").param("size", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page").value(3))
+                .andExpect(jsonPath("$.size").value(10));
+
+        verify(service).listar(3, 10);
+    }
+
+    /** Limites literais (100 é o máximo documentado): 100 passa, 101 não. */
+    @Test
+    void listarAceitaOTamanhoMaximoDe100() throws Exception {
+        when(service.listar(0, 100)).thenReturn(pagina(List.of(), 0, 100, 0, 0));
+
+        mockMvc.perform(get("/clientes").param("size", "100")).andExpect(status().isOk());
+
+        assertEquals(100, ClienteController.TAMANHO_MAXIMO);
+    }
+
+    @Test
+    void listarSizeAcimaDoMaximoRetorna400ENaoChegaAoService() throws Exception {
+        mockMvc.perform(get("/clientes").param("size", "101"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.title").value("Dados inválidos"))
+                .andExpect(jsonPath("$.erros.size").value("deve ser menor que ou igual à 100"));
+
+        verifyNoInteractions(service);
+    }
+
+    @Test
+    void listarSizeZeroRetorna400() throws Exception {
+        mockMvc.perform(get("/clientes").param("size", "0"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erros.size").value("deve ser maior que ou igual à 1"));
+
+        verifyNoInteractions(service);
+    }
+
+    @Test
+    void listarPageNegativaRetorna400() throws Exception {
+        mockMvc.perform(get("/clientes").param("page", "-1"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erros.page").value("deve ser maior que ou igual à 0"));
+
+        verifyNoInteractions(service);
+    }
+
+    /** A página máxima existe porque page * size precisa caber em um int (acima disso a consulta falharia com 500). */
+    @Test
+    void listarPageAcimaDoMaximoRetorna400() throws Exception {
+        when(service.listar(ClienteController.PAGINA_MAXIMA, 100))
+                .thenReturn(pagina(List.of(), ClienteController.PAGINA_MAXIMA, 100, 0, 0));
+
+        mockMvc.perform(get("/clientes").param("page", "10000000").param("size", "100")).andExpect(status().isOk());
+        mockMvc.perform(get("/clientes").param("page", "10000001"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erros.page").exists());
+
+        assertEquals(10_000_000, ClienteController.PAGINA_MAXIMA);
+        assertTrue((long) ClienteController.PAGINA_MAXIMA * ClienteController.TAMANHO_MAXIMO <= Integer.MAX_VALUE);
+    }
+
+    @Test
+    void listarComPageESizeInvalidosJuntosDizOsDois() throws Exception {
+        mockMvc.perform(get("/clientes").param("page", "-5").param("size", "500"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erros.page").exists())
+                .andExpect(jsonPath("$.erros.size").exists());
+    }
+
+    @ParameterizedTest
+    @CsvSource({"page,abc", "size,dez", "size,1.5", "size,99999999999"})
+    void listarComParametroQueNaoENumeroRetorna400SemEcoarOValor(String nome, String valor) throws Exception {
+        mockMvc.perform(get("/clientes").param(nome, valor == null ? "" : valor))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.title").value("Parâmetro inválido"))
+                .andExpect(jsonPath("$.detail").value("Valor inválido para o parâmetro '" + nome + "'."));
+
+        verifyNoInteractions(service);
     }
 
     @Test

@@ -14,6 +14,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 import tools.jackson.core.JacksonException;
@@ -104,6 +105,31 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         ProblemDetail problema = ProblemDetail.forStatusAndDetail(
                 status, "Valor inválido para o parâmetro '" + nome + "'.");
         problema.setTitle("Parâmetro inválido");
+        return handleExceptionInternal(ex, problema, headers, status, request);
+    }
+
+    /**
+     * Validação dos parâmetros do método (por exemplo {@code page} e {@code size} de {@code GET /clientes}):
+     * mesmo formato de {@code erros} da validação do corpo, com o nome do parâmetro como chave e sem ecoar o
+     * valor rejeitado.
+     */
+    @Override
+    protected ResponseEntity<Object> handleHandlerMethodValidationException(
+            HandlerMethodValidationException ex, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
+        Map<String, SortedSet<String>> porParametro = new TreeMap<>();
+        ex.getParameterValidationResults().forEach(resultado -> {
+            String nome = resultado.getMethodParameter().getParameterName();
+            String chave = nome != null ? nome : "parametro";
+            resultado.getResolvableErrors().forEach(erro ->
+                    porParametro.computeIfAbsent(chave, k -> new TreeSet<>())
+                            .add(String.valueOf(erro.getDefaultMessage())));
+        });
+        Map<String, String> erros = new TreeMap<>();
+        porParametro.forEach((nome, mensagens) -> erros.put(nome, String.join("; ", mensagens)));
+
+        ProblemDetail problema = ProblemDetail.forStatusAndDetail(status, "Há campos inválidos na requisição.");
+        problema.setTitle("Dados inválidos");
+        problema.setProperty("erros", erros);
         return handleExceptionInternal(ex, problema, headers, status, request);
     }
 

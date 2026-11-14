@@ -38,11 +38,10 @@ services:
     mem_limit: 512m
     restart: unless-stopped
     healthcheck:
-      # A imagem só tem o JRE (sem curl): o bash (o sh padrão não tem /dev/tcp) pede GET /clientes e espera 200.
-      # TODO(#29): enquanto a listagem não é paginada, isto lê a tabela inteira a cada 5 s; trocar por
-      # GET /clientes?size=1 quando a paginação chegar (continua provando a conexão com o banco).
+      # A imagem só tem o JRE (sem curl): o bash (o sh padrão não tem /dev/tcp) pede GET /clientes?size=1 e espera 200.
+      # size=1: a listagem é paginada, então isto lê um cliente por vez e ainda prova a conexão com o banco.
       # start_period dá tempo à JVM e às migrations; falhas nele não contam.
-      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/localhost/8080 && printf 'GET /clientes HTTP/1.0\r\n\r\n' >&3 && head -n1 <&3 | grep -q ' 200 '"]
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/localhost/8080 && printf 'GET /clientes?size=1 HTTP/1.0\r\n\r\n' >&3 && head -n1 <&3 | grep -q ' 200 '"]
       interval: 5s
       timeout: 5s
       retries: 10
