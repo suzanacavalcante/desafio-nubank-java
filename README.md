@@ -1,5 +1,7 @@
 # Desafio Nubank – Backend Java
 
+[![CI](https://github.com/suzanacavalcante/desafio-nubank-java/actions/workflows/ci.yml/badge.svg)](https://github.com/suzanacavalcante/desafio-nubank-java/actions/workflows/ci.yml)
+
 API REST de **clientes e contatos** (1 cliente → N contatos), feita com **Java 21**, **Spring Boot 4.1** e **PostgreSQL**.
 
 > README em evolução. A versão final (CI, exemplos completos) vem na issue #19.
@@ -70,7 +72,6 @@ Ficam fora do formato os erros que acontecem **antes** do MVC ou fora dele: URL 
 
 Ainda **não** implementados (planejados nas issues):
 
-- GitHub Actions (#18)
 - Paginação em `GET /clientes` (#29)
 - Resiliência a queda do banco: timeout curto e 503 com `Retry-After` (#34)
 
@@ -153,6 +154,15 @@ Testes de regressão de bugs conhecidos e ainda abertos devem ter a tag `bug-con
 ```bash
 ./mvnw test -Dgroups=bug-conhecido -DexcludedGroups=nenhum
 ```
+
+### Integração contínua
+
+O workflow [`.github/workflows/ci.yml`](.github/workflows/ci.yml) roda em todo PR e em todo push na `main`, com dois jobs:
+
+- **Build e testes:** JDK 21 (Temurin, com cache do Maven) e `./mvnw -B verify`. O Testcontainers funciona no runner `ubuntu-latest`, que já tem Docker. Se falhar, os relatórios do Surefire ficam como artefato da execução.
+- **Imagem Docker e Compose:** `docker compose up --build -d --wait` (constrói a imagem do `Dockerfile`, que o `verify` não exercita, e sobe banco + API do zero) e confere `GET /clientes` = 200.
+
+O **Dependabot** (`.github/dependabot.yml`) abre PRs semanais para Maven, GitHub Actions e a imagem base do Docker; o springdoc, que o BOM do Spring Boot não gerencia, passa a ser acompanhado por ele.
 
 ## Parar o banco (e a API)
 

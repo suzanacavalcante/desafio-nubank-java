@@ -3,9 +3,9 @@
 API REST de **clientes e contatos** (1 cliente → N contatos), desafio técnico backend.
 Os diagramas usam [Mermaid](https://mermaid.js.org/) (sintaxe C4), então renderizam direto no GitHub (no VS Code, com a extensão Markdown Preview Mermaid Support).
 
-> **Estado documentado:** branch `main` com validação (#10), tratamento global de erros (#11), testes com Testcontainers (#14), Swagger/OpenAPI (#15) e migrations com Flyway (#16) e Dockerfile + Compose (#17) implementados.
+> **Estado documentado:** branch `main` com validação (#10), tratamento global de erros (#11), testes com Testcontainers (#14), Swagger/OpenAPI (#15) e migrations com Flyway (#16) e Dockerfile + Compose (#17) e integração contínua (#18) implementados.
 > Itens **ainda não implementados** aparecem marcados como *(planejado)*:
-> CI (#18), paginação (#29) e resiliência a queda do banco (#34).
+> Paginação (#29) e resiliência a queda do banco (#34).
 
 ---
 
@@ -62,6 +62,7 @@ C4Container
 - Credenciais vêm do `.env` (não versionado; modelo em `.env.example`) ou de variáveis de ambiente: `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`. `DB_USER` e `DB_PASSWORD` não têm valor padrão na aplicação.
 - O mesmo `.env` alimenta o Docker Compose e o Spring (`spring.config.import: optional:file:.env[.properties]`).
 - Perfil `dev` (ativado por `./mvnw spring-boot:run`): SQL formatado e log do Hibernate em `debug`.
+- **CI** (GitHub Actions, `.github/workflows/ci.yml`): em todo PR e push na `main` roda `./mvnw verify` (JDK 21; o Testcontainers usa o Docker do runner) e um *smoke test* do Compose (`up --build --wait` + `GET /clientes` = 200). É ferramenta de desenvolvimento, não faz parte da arquitetura em execução, por isso não aparece nos diagramas. O Dependabot mantém dependências, Actions e imagem base atualizadas.
 - `spring.jpa.open-in-view: false`: todo mapeamento para DTO acontece dentro da transação do service.
 
 ---
@@ -283,6 +284,5 @@ sequenceDiagram
 
 | Issue | Mudança | Impacto no C4 |
 |---|---|---|
-| #18 | GitHub Actions | Novo sistema externo (CI) no nível de contexto |
 | #29 | Paginação em `GET /clientes` | Contrato da listagem muda (parâmetros de página); sem alterar a estrutura de componentes |
 | #34 | Resiliência a queda do banco | Timeout curto e resposta 503 com `Retry-After`, tratados em `config` |

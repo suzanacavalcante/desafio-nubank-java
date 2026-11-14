@@ -1,0 +1,17 @@
+# Atualizações automáticas por PR. O springdoc não é gerenciado pelo BOM do Spring Boot (e traz um segundo
+# stack Jackson 2): o Dependabot é quem avisa das atualizações e correções de segurança dele.
+version: 2
+updates:
+  - package-ecosystem: maven
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
