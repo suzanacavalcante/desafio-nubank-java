@@ -159,10 +159,10 @@ Testes de regressão de bugs conhecidos e ainda abertos devem ter a tag `bug-con
 
 O workflow [`.github/workflows/ci.yml`](.github/workflows/ci.yml) roda em todo PR e em todo push na `main`, com dois jobs:
 
-- **Build e testes:** JDK 21 (Temurin, com cache do Maven) e `./mvnw -B verify`. O Testcontainers funciona no runner `ubuntu-latest`, que já tem Docker. Se falhar, os relatórios do Surefire ficam como artefato da execução.
+- **Build e testes:** JDK 21 (Temurin, com cache do Maven) e `./mvnw -B verify`. O Testcontainers funciona no runner `ubuntu-24.04`, que já tem Docker. Se falhar, os relatórios do Surefire ficam como artefato da execução.
 - **Imagem Docker e Compose:** `docker compose up --build -d --wait` (constrói a imagem do `Dockerfile`, que o `verify` não exercita, e sobe banco + API do zero) e confere `GET /clientes` = 200.
 
-O **Dependabot** (`.github/dependabot.yml`) abre PRs semanais para Maven, GitHub Actions e as imagens do Docker (`Dockerfile` e `docker-compose.yml`); o springdoc, que o BOM do Spring Boot não gerencia, passa a ser acompanhado por ele.
+O **Dependabot** (`.github/dependabot.yml`) abre PRs semanais para Maven, GitHub Actions e as imagens do Docker (`Dockerfile` e `docker-compose.yml`). Em Maven e Docker, saltos de versão **maior** (outro JDK, outra versão do PostgreSQL ou do Spring Boot) são ignorados: são decisão manual; minor e patch chegam normalmente. O springdoc, que o BOM do Spring Boot não gerencia, também é acompanhado por ele.
 
 ## Parar o banco (e a API)
 

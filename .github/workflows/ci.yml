@@ -19,7 +19,9 @@ permissions:
 jobs:
   verify:
     name: Build e testes (./mvnw verify)
-    runs-on: ubuntu-latest
+    # versão fixa: o rótulo ubuntu-latest muda sozinho (Ubuntu 26 em out/2026) e o Dependabot não o atualiza;
+    # a troca vira um PR consciente
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
@@ -45,7 +47,9 @@ jobs:
 
   imagem:
     name: Imagem Docker e Compose (smoke test)
-    runs-on: ubuntu-latest
+    # versão fixa: o rótulo ubuntu-latest muda sozinho (Ubuntu 26 em out/2026) e o Dependabot não o atualiza;
+    # a troca vira um PR consciente
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7

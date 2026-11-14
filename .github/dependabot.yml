@@ -6,6 +6,10 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      # salto de versão maior (JDK, PostgreSQL, Spring Boot...) é decisão manual; minor e patch seguem chegando
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
     open-pull-requests-limit: 5
   - package-ecosystem: github-actions
     directory: /
@@ -15,8 +19,16 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      # salto de versão maior (JDK, PostgreSQL, Spring Boot...) é decisão manual; minor e patch seguem chegando
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   # imagens do docker-compose.yml (o ecossistema acima só olha o Dockerfile)
   - package-ecosystem: docker-compose
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      # salto de versão maior (JDK, PostgreSQL, Spring Boot...) é decisão manual; minor e patch seguem chegando
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]

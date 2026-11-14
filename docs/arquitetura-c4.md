@@ -3,7 +3,7 @@
 API REST de **clientes e contatos** (1 cliente → N contatos), desafio técnico backend.
 Os diagramas usam [Mermaid](https://mermaid.js.org/) (sintaxe C4), então renderizam direto no GitHub (no VS Code, com a extensão Markdown Preview Mermaid Support).
 
-> **Estado documentado:** branch `main` com validação (#10), tratamento global de erros (#11), testes com Testcontainers (#14), Swagger/OpenAPI (#15) e migrations com Flyway (#16) e Dockerfile + Compose (#17) e integração contínua (#18) implementados.
+> **Estado documentado:** branch `main` com validação (#10), tratamento global de erros (#11), testes com Testcontainers (#14), Swagger/OpenAPI (#15), migrations com Flyway (#16), Dockerfile + Compose (#17) e integração contínua (#18) implementados.
 > Itens **ainda não implementados** aparecem marcados como *(planejado)*:
 > Paginação (#29) e resiliência a queda do banco (#34).
 
