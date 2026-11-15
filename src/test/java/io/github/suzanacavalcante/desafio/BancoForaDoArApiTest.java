@@ -39,12 +39,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Contexto próprio (a URL passa pelo proxy e o {@code connection-timeout} é de 1 s para o teste ser rápido), então
  * não afeta os outros testes. É um único teste porque as etapas dependem do estado do banco.
  */
-@SpringBootTest(properties = "spring.datasource.hikari.connection-timeout=1000")
+@SpringBootTest(properties = {"spring.datasource.hikari.connection-timeout=1000",
+        "spring.datasource.hikari.data-source-properties.socketTimeout=1"})
 @AutoConfigureMockMvc
 class BancoForaDoArApiTest {
 
-    /** Teto generoso para "poucos segundos" (o padrão do Hikari seria 30 s por requisição). */
-    private static final Duration LIMITE = Duration.ofSeconds(5);
+    /** "Poucos segundos": o esperado é ~1 s (timeouts de 1 s no teste); o padrão do Hikari seria 30 s por requisição. */
+    private static final Duration LIMITE = Duration.ofSeconds(3);
 
     /** Tempo máximo para a aplicação voltar sozinha depois que o banco volta. */
     private static final Duration RECUPERACAO = Duration.ofSeconds(20);
@@ -117,8 +118,38 @@ class BancoForaDoArApiTest {
 
         proxy.religar();
 
-        // banco de volta: a aplicação se recupera sozinha, sem reiniciar. Não é instantâneo: o Hikari espera um
-        // pouco entre as tentativas de recriar conexões (backoff), então enquanto isso ainda sai 503 (nunca 500).
+        // banco de volta: a aplicação se recupera sozinha, sem reiniciar
+        esperaRecuperar();
+        rapido(post("/clientes").contentType(JSON_UTF8)
+                .content("{\"nome\":\"Volta\"}".getBytes(StandardCharsets.UTF_8))).andExpect(status().isCreated());
+    }
+
+    /**
+     * Banco que <b>trava sem recusar</b> (conexões abertas, nenhuma resposta): sem {@code socketTimeout} a
+     * requisição ficaria pendurada por minutos; com ele (1 s no teste, 10 s por padrão) vira 503 com Retry-After.
+     */
+    @Test
+    void bancoQueTravaSemRecusarTambemDa503EmPoucosSegundos() throws Exception {
+        rapido(get("/clientes")).andExpect(status().isOk());
+
+        proxy.congelar();
+        try {
+            espera503(rapido(get("/clientes")));
+            espera503(rapido(post("/clientes").contentType(JSON_UTF8)
+                    .content("{\"nome\":\"Ana\"}".getBytes(StandardCharsets.UTF_8))));
+            rapido(get("/clientes?size=0")).andExpect(status().isBadRequest());
+        } finally {
+            proxy.descongelar();
+        }
+
+        esperaRecuperar();
+    }
+
+    /**
+     * Espera a aplicação voltar sozinha. Não é instantâneo: o Hikari espera um pouco entre as tentativas de recriar
+     * conexões (backoff), então enquanto isso ainda sai 503 (nunca 500).
+     */
+    private void esperaRecuperar() throws Exception {
         long inicio = System.nanoTime();
         int status;
         do {
@@ -130,7 +161,5 @@ class BancoForaDoArApiTest {
         } while (status != 200 && Duration.ofNanos(System.nanoTime() - inicio).compareTo(RECUPERACAO) < 0);
         assertEquals(200, status, "a aplicação deveria voltar sozinha em até " + RECUPERACAO);
         rapido(get("/clientes")).andExpect(status().isOk()).andExpect(jsonPath("$.content").isArray());
-        rapido(post("/clientes").contentType(JSON_UTF8)
-                .content("{\"nome\":\"Volta\"}".getBytes(StandardCharsets.UTF_8))).andExpect(status().isCreated());
     }
 }

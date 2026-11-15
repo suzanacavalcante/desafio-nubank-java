@@ -131,11 +131,12 @@ Se o banco cair com a aplicação no ar, as rotas que o usam respondem **503** (
 {"title":"Serviço indisponível","status":503,"detail":"Serviço temporariamente indisponível. Tente novamente em instantes.","instance":"/clientes"}
 ```
 
-- **Rápido:** o `spring.datasource.hikari.connection-timeout` é de **3 s** (variável `DB_CONNECTION_TIMEOUT_MS`), contra os 30 s padrão do Hikari. Com 30 s por requisição, as threads do Tomcat se esgotavam e até rotas que não usam o banco travavam. 3 s sobra para um banco saudável (obter conexão do pool leva milissegundos) e falha depressa quando ele não responde.
-- **Sem vazar nada:** a resposta não traz URL JDBC, host, porta nem SQL; a mensagem do driver e o *stack trace* ficam só no log (nível `ERROR`).
-- **Cobre também a 1ª requisição depois da queda**, que pega uma conexão já morta do pool (a consulta e o rollback falham). Só falhas de conexão viram 503; erro de dados (restrição, SQL) continua 500.
+- **Rápido na recusa:** o `spring.datasource.hikari.connection-timeout` é de **3 s** (variável `DB_CONNECTION_TIMEOUT_MS`), contra os 30 s padrão do Hikari. Com 30 s por requisição, as threads do Tomcat se esgotavam e até rotas que não usam o banco travavam. 3 s sobra para um banco saudável (obter conexão do pool leva milissegundos). Esse limite vale para **obter conexão do pool** (banco que recusa ou pool sem conexão livre).
+- **Rápido também quando o banco trava sem recusar** (host que cai sem RST, firewall que descarta pacotes, tabela travada por lock): numa conexão já aberta o `connection-timeout` não vale, então há um `socketTimeout` de **10 s** (variável `DB_SOCKET_TIMEOUT_S`, mais `tcpKeepAlive`). Estourado, vira 503. O teste de conexões ociosas do pool também é limitado (`validation-timeout` de 1 s; o padrão do Hikari seria 5 s). Esse é o teto de uma requisição pendurada; escolha um valor bem acima da consulta mais lenta esperada (as daqui levam milissegundos).
+- **Sem vazar nada:** a resposta não traz URL JDBC, host, porta nem SQL. A mensagem do driver fica só no log: o *stack trace* completo (`ERROR`, ~13 KB) aparece na **primeira** ocorrência e depois no máximo **uma vez por minuto**; as demais saem em uma linha (`WARN`) com a causa raiz, para uma queda com tráfego não encher o disco de logs.
+- **Conexões mortas do pool:** logo depois da queda (ou de um reinício do banco sob carga), o pool ainda guarda conexões mortas; cada uma falha uma vez (consulta e rollback) e é descartada. Até o tamanho do pool (10) de requisições seguidas podem receber 503 mesmo com o banco já de volta, e depois normaliza. Só falhas de conexão viram 503; erro de dados (restrição, SQL) continua 500.
 - **Volta sozinha:** quando o banco volta, o pool recria as conexões e a API responde normalmente, sem reiniciar (o Hikari espera um pouco entre as tentativas, então a volta pode levar alguns segundos, com 503 nesse intervalo).
-- A validação (400) e as rotas que não usam o banco (`/v3/api-docs`, Swagger) continuam respondendo rápido durante a queda. O teste `BancoForaDoArApiTest` derruba e religa o banco (um proxy TCP na frente do PostgreSQL do Testcontainers) e confere tudo isso.
+- A validação (400) e as rotas que não usam o banco (`/v3/api-docs`, Swagger) continuam respondendo rápido durante a queda, **até o limite das threads do Tomcat**: medido com o banco parado, 60 requisições simultâneas não atrapalham, mas com centenas simultâneas (250 a 500) o `/v3/api-docs` chegou a levar 2 a 5 s (ainda muito melhor que os 30 s de antes). Os testes `BancoForaDoArApiTest` derrubam, congelam e religam o banco (um proxy TCP na frente do PostgreSQL do Testcontainers) e conferem tudo isso.
 
 Ficam fora do formato os erros que acontecem **antes** do MVC ou fora dele: URL com percent-encoding inválido (`/clientes/%zz`) e cabeçalhos gigantes (página de erro do Tomcat), `TRACE` e `GET /error` direto (JSON padrão do Spring Boot). As mensagens do próprio Spring MVC (rota inexistente, método não suportado) saem em inglês.
 
@@ -170,7 +171,7 @@ Diagramas (contexto, contêineres, componentes e código) em [docs/arquitetura-c
 ## O que eu faria a seguir
 
 - **Paginação por cursor** (*keyset*, `id > último`) em `GET /clientes`, se a base crescer a ponto de o `OFFSET` pesar ou de a paginação por `page` repetir/pular itens com escritas concorrentes.
-- **Resiliência a banco lento ou instável**: hoje só a queda total é tratada (503 + `Retry-After`); faltam *circuit breaker* e métricas do pool para evitar enfileirar requisições durante a oscilação.
+- **Resiliência a banco lento ou instável**: hoje só a queda total é tratada (503 + `Retry-After`); faltam *circuit breaker*, métricas do pool e `statement_timeout` por consulta para evitar enfileirar requisições durante a oscilação.
 - **Operações que faltam ao CRUD**: buscar, atualizar e remover clientes e contatos (o desafio pede só cadastro e consulta); ao remover, a FK já tem `ON DELETE CASCADE`.
 - **Autenticação e autorização** (por exemplo, OAuth2/JWT com Spring Security), e *rate limiting* nas rotas de escrita.
 - **Observabilidade**: Actuator com *health* e métricas, logs estruturados e *correlation id* por requisição.
@@ -219,7 +220,8 @@ Sobe o PostgreSQL, espera o *healthcheck* dele e então sobe a API em `http://lo
 | `DB_PASSWORD` | `postgres` | senha (obrigatória, sem padrão na aplicação) |
 | `DB_PORT` | `5434` | porta no host (evita conflito com PostgreSQL local na 5432) |
 | `DB_HOST` | `localhost` | host do banco |
-| `DB_CONNECTION_TIMEOUT_MS` | `3000` | quanto uma requisição espera por conexão do banco antes de falhar com 503 |
+| `DB_CONNECTION_TIMEOUT_MS` | `3000` | quanto uma requisição espera por conexão do banco antes de falhar com 503 (**mínimo 250**; abaixo disso a aplicação não sobe, e `0` desliga o limite: não use) |
+| `DB_SOCKET_TIMEOUT_S` | `10` | segundos esperando resposta numa conexão já aberta (banco que trava sem recusar) antes de falhar com 503 |
 
 - No `.env`, escreva os valores **sem aspas**, sem `export` e sem comentário na mesma linha (o Compose e o Spring leem o arquivo de formas diferentes). Detalhes no próprio `.env.example`.
 - O banco só é publicado em `127.0.0.1`, não fica acessível pela rede.

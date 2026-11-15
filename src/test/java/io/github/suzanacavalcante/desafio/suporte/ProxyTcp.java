@@ -21,6 +21,7 @@ public final class ProxyTcp implements AutoCloseable {
     private final int porta;
     private final Set<Socket> abertos = ConcurrentHashMap.newKeySet();
     private volatile ServerSocket servidor;
+    private volatile boolean congelado;
 
     public ProxyTcp(String destinoHost, int destinoPorta) throws IOException {
         this.destinoHost = destinoHost;
@@ -41,6 +42,18 @@ public final class ProxyTcp implements AutoCloseable {
             fechar(s);
         }
         abertos.clear();
+    }
+
+    /**
+     * Banco que <b>trava sem recusar</b>: as conexões continuam abertas, mas nada mais é repassado (como um host
+     * que cai sem RST, ou um firewall que descarta pacotes).
+     */
+    public void congelar() {
+        congelado = true;
+    }
+
+    public void descongelar() {
+        congelado = false;
     }
 
     /** Banco "de volta": volta a escutar na mesma porta. */
@@ -69,7 +82,17 @@ public final class ProxyTcp implements AutoCloseable {
     private void repassar(Socket de, Socket para) {
         Thread.ofPlatform().daemon().name("proxy-tcp-repassa").start(() -> {
             try (InputStream in = de.getInputStream(); OutputStream out = para.getOutputStream()) {
-                in.transferTo(out);
+                byte[] buffer = new byte[8192];
+                int lidos;
+                while ((lidos = in.read(buffer)) != -1) {
+                    while (congelado) {
+                        Thread.sleep(20);
+                    }
+                    out.write(buffer, 0, lidos);
+                    out.flush();
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
             } catch (IOException e) {
                 // conexão derrubada
             } finally {

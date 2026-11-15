@@ -202,7 +202,7 @@ A FK (`fk_contatos_cliente`) tem `ON DELETE CASCADE` e há o índice `idx_contat
 | GET | `/clientes` | – | 200 lista de `ClienteResponse` com contatos | – |
 | GET | `/clientes/{id}/contatos` | – | 200 lista de `ContatoResponse` | 400 (`{id}` inválido), 404 |
 
-> Todo erro sai como `ProblemDetail` (`application/problem+json`): validação → 400 com `erros` (campo → mensagem, em português, sem ecoar o valor rejeitado); JSON malformado ou `{id}` de tipo errado → 400; `ClienteNaoEncontradoException` → 404; banco indisponível (`CannotCreateTransactionException`, `DataAccessResourceFailureException` ou falha de conexão na cadeia de causas, ver `FalhaDeConexao`) → 503 com `Retry-After: 5`, sem jdbc/host/porta/SQL (o `connection-timeout` do Hikari é 3 s); qualquer outra exceção → 500 genérico (stack trace só no log). `GET /clientes` não tem erros esperados do cliente.
+> Todo erro sai como `ProblemDetail` (`application/problem+json`): validação → 400 com `erros` (campo → mensagem, em português, sem ecoar o valor rejeitado); JSON malformado ou `{id}` de tipo errado → 400; `ClienteNaoEncontradoException` → 404; banco indisponível (`CannotCreateTransactionException`, `DataAccessResourceFailureException` ou falha de conexão na cadeia de causas, ver `FalhaDeConexao`) → 503 com `Retry-After: 5`, sem jdbc/host/porta/SQL (o `connection-timeout` do Hikari é 3 s e o `socketTimeout` do driver, 10 s); qualquer outra exceção → 500 genérico (stack trace só no log). `GET /clientes` não tem erros esperados do cliente.
 
 ### Fluxo: criar contato (`POST /contatos`)
 
