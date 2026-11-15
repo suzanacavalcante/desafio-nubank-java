@@ -19,6 +19,11 @@ import java.sql.SQLTransientConnectionException;
  * {@code 08} (falha de conexão) ou {@code 57P} (servidor desligando/reiniciando); e {@code SQLException} sem
  * {@code SQLState}, que é como o pool/driver reporta uma conexão fechada. Erros de dados (restrições, sintaxe)
  * sempre trazem {@code SQLState} das classes {@code 22}, {@code 23}, {@code 42} etc. e <b>não</b> entram.
+ * <p>
+ * <b>Compromisso:</b> a regra do {@code SQLState} nulo é a mais larga: qualquer {@code SQLException} sem estado na
+ * cadeia vira 503 (retentável), mesmo que não seja de conexão. É o que cobre o "Connection is closed" do pool, e o
+ * PostgreSQL sempre informa o estado nos erros de dados, então o risco de falso positivo é baixo. Se aparecer um,
+ * estreite pela classe ou pela mensagem em vez de remover a regra.
  */
 final class FalhaDeConexao {
 
