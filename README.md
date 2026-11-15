@@ -8,6 +8,7 @@ API REST de **clientes e contatos** (1 cliente → N contatos), feita como solu�
 
 - Cadastro de clientes (com ou sem contatos), de contatos para um cliente existente e consultas.
 - Validação de entrada, erros padronizados em `ProblemDetail` (RFC 7807) e documentação interativa (Swagger).
+- Listagem de clientes **paginada** e resposta **503 com `Retry-After`** quando o banco cai, com timeouts curtos (a API não trava esperando o banco).
 - Schema versionado com Flyway, testes com PostgreSQL descartável (Testcontainers), CI no GitHub Actions e Docker Compose para subir tudo com um comando.
 
 ### Stack
@@ -50,10 +51,12 @@ curl http://localhost:8080/clientes
 
 | Método | Rota | Descrição | Sucesso | Erros |
 |---|---|---|---|---|
-| POST | `/clientes` | Cria cliente, com ou sem contatos | 201 | 400 |
-| POST | `/contatos` | Cria contato para um cliente existente (`clienteId` no corpo) | 201 | 400, 404 |
-| GET | `/clientes` | Lista clientes com seus contatos, **paginado** (`page`, `size`) | 200 | 400 |
-| GET | `/clientes/{id}/contatos` | Lista os contatos de um cliente | 200 | 400, 404 |
+| POST | `/clientes` | Cria cliente, com ou sem contatos | 201 | 400, 503 |
+| POST | `/contatos` | Cria contato para um cliente existente (`clienteId` no corpo) | 201 | 400, 404, 503 |
+| GET | `/clientes` | Lista clientes com seus contatos, **paginado** (`page`, `size`) | 200 | 400, 503 |
+| GET | `/clientes/{id}/contatos` | Lista os contatos de um cliente | 200 | 400, 404, 503 |
+
+O **503** só ocorre com o banco indisponível (veja [Banco fora do ar](#banco-fora-do-ar)).
 
 ### Paginação de `GET /clientes`
 
@@ -94,8 +97,11 @@ curl -X POST http://localhost:8080/clientes -H "Content-Type: application/json" 
 curl -X POST http://localhost:8080/contatos -H "Content-Type: application/json" \
   -d '{"clienteId":1,"telefone":"11888880000","email":"outro@exemplo.com"}'
 
-# Listar clientes com contatos  ->  200
+# Listar clientes com contatos  ->  200 (paginado: padrão page=0, size=20)
 curl http://localhost:8080/clientes
+
+# Segunda página de 10  ->  200
+curl "http://localhost:8080/clientes?page=1&size=10"
 
 # Contatos do cliente 1  ->  200
 curl http://localhost:8080/clientes/1/contatos
@@ -159,7 +165,8 @@ Ficam fora do formato os erros que acontecem **antes** do MVC ou fora dele: URL 
 | **Pacotes por feature** (`cliente`, `contato`) em vez de por camada | Cada feature carrega seu controller, service, repository, mapper e DTOs: o que muda junto fica junto, e dá para entender uma feature abrindo uma pasta. Pacotes transversais só para o que é compartilhado: `config` (erros), `validacao` e `openapi`. |
 | **DTOs em `record`**, a API nunca expõe entidades | Evita `LazyInitializationException` na serialização, recursão JSON cliente ↔ contato e vazamento do modelo de persistência para o contrato. O contrato da API muda só quando o DTO muda. |
 | `open-in-view: false` e mapeamento para DTO **dentro** da transação do service | Acesso preguiçoso só onde há transação; se alguém mapear fora, falha cedo em vez de gerar consultas escondidas na camada web. |
-| `JOIN FETCH` na listagem | Uma consulta em vez de N+1. O custo é a resposta inteira em memória: por isso a paginação (#29) é a evolução natural. |
+| **Paginação em duas consultas** (ids da página + `JOIN FETCH` dos contatos) | `JOIN FETCH` de coleção junto com `Pageable` paginaria **em memória**; buscar os ids primeiro mantém o `LIMIT` no banco e o número de consultas constante, sem N+1. `size` máximo 100 (acima é 400), envelope próprio em vez do `Page` do Spring. |
+| **503 + `Retry-After`** e timeouts curtos com o banco fora do ar | O padrão do Hikari (30 s por requisição) esgotava as threads do Tomcat e travava até rotas que não usam o banco. Falhar rápido e avisar quando tentar de novo é melhor do que pendurar o cliente. |
 | **404** (e não 400) para cliente inexistente | O recurso referenciado não existe: o erro não é de formato da requisição (400), é de recurso ausente. Vale também para `POST /contatos`, em que o `clienteId` está no corpo, mantendo uma regra única: *id de cliente que não existe → 404*. 400 fica para requisição malformada ou inválida. |
 | Erros em **`ProblemDetail`** (RFC 7807), sem stack trace nem eco do valor rejeitado | Formato padrão e único para todos os erros, que o cliente da API consegue tratar de forma genérica; nada sensível vaza. |
 | **Flyway** + `ddl-auto: validate` | O schema é versionado e reproduzível; o Hibernate só confere que as entidades batem com ele. |
