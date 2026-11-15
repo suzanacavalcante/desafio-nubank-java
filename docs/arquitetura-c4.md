@@ -95,8 +95,8 @@ C4Component
             Component(tEnt, "Contato", "@Entity contatos", "Telefone, e-mail e referência LAZY ao cliente")
         }
 
-        Component(dto, "DTOs (records)", "Java records", "ClienteRequest/Response, ContatoRequest, NovoContatoRequest, ContatoResponse")
-        Component(cfg, "config", "pacote", "ApiExceptionHandler: erros do MVC em ProblemDetail (RFC 7807): 400 com mapa campo→mensagem, 404, 503 com Retry-After (banco fora do ar), 500 genérico")
+        Component(dto, "DTOs (records)", "Java records", "ClienteRequest/Response, PaginaDeClientes (envelope da listagem paginada), ContatoRequest, NovoContatoRequest, ContatoResponse")
+        Component(cfg, "config", "pacote", "ApiExceptionHandler: erros do MVC em ProblemDetail (RFC 7807): 400 com mapa campo→mensagem, 404, 503 com Retry-After (banco fora do ar, reconhecido por FalhaDeConexao), 500 genérico")
         Component(val, "validacao", "pacote", "Restrições de Bean Validation reutilizáveis (@SemCaracteresInvalidos); sem dependências do projeto")
         Component(oas, "Documentação OpenAPI", "springdoc-openapi 3.2.0", "Swagger UI em /swagger-ui.html e documento em /v3/api-docs; os endpoints são descritos por anotações nos controllers e DTOs; o pacote openapi traz título, versão, exemplos, o tipo Problema e as meta-anotações das respostas de erro (@Resposta400..., @Resposta404...)")
     }
@@ -272,6 +272,7 @@ sequenceDiagram
 | Paginação em duas consultas (ids + `JOIN FETCH`) | `JOIN FETCH` de coleção com `Pageable` paginaria em memória; buscar os ids da página primeiro mantém o `LIMIT` no banco e o número de consultas constante (sem N+1). `size` máximo 100: acima é 400. Envelope próprio (`PaginaDeClientes`), não o `Page` do Spring. |
 | Flyway + `ddl-auto: validate` | O schema tem uma única origem versionada (as migrations, as mesmas em dev, testes e produção); o Hibernate falha na subida se as entidades divergirem dela. FK com `ON DELETE CASCADE` e índice em `contatos.cliente_id`. |
 | Erros em `ProblemDetail` (RFC 7807) | Formato padrão e único; sem stack trace e sem ecoar o valor rejeitado. |
+| 503 com `Retry-After` e timeouts curtos do banco | Com o banco fora do ar a API falha rápido (`connection-timeout` 3 s, `socketTimeout` 10 s) em vez de esgotar as threads do Tomcat; `FalhaDeConexao` reconhece a queda pela cadeia de causas, inclusive conexões mortas do pool. |
 | springdoc-openapi 3.2.0 | Série compatível com o Spring Boot 4.1; documentação por anotações nos controllers e DTOs. |
 | Testes com Testcontainers | Testes independentes do banco local, do Compose e do `.env`. |
 | Credenciais sem valor padrão | Segredos nunca ficam no código; vêm do `.env`/ambiente. |

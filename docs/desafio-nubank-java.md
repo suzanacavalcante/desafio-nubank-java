@@ -1,6 +1,6 @@
 # Desafio Nubank (Backend) em Java + Spring Boot
 
-> Escrito para estudo. É a stack **pedida no enunciado original**. O código é um esboço **não executado**: confira versões antes de rodar.
+> **Documento histórico** de estudo: o guia técnico original, escrito antes da implementação. O código abaixo é um esboço **não executado** e diverge do projeto atual (pacote base, DTOs, tratamento de erros, paginação, Flyway). Para o que existe de fato, veja o [README](../README.md) e [arquitetura-c4.md](arquitetura-c4.md).
 > Contexto do desafio: ver [desafio-backend-nubank.md](desafio-backend-nubank.md).
 
 ## 1. O que construir

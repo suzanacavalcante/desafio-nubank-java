@@ -1,6 +1,6 @@
 # Issues do projeto: Desafio Nubank (Backend Java)
 
-> Proposta para você revisar e opinar. Nada foi implementado ainda.
+> **Documento histórico.** Era a proposta inicial de issues; o acompanhamento real está nas issues e no board do GitHub, e o que foi construído está descrito no [README](../README.md) e em [arquitetura-c4.md](arquitetura-c4.md). Pode divergir do projeto atual.
 > Referências: [desafio-nubank-java.md](desafio-nubank-java.md) (guia técnico) e [../../desafio-backend-nubank.md](../../desafio-backend-nubank.md) (enunciado).
 
 **Convenções**
