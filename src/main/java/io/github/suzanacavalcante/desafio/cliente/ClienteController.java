@@ -7,6 +7,7 @@ import io.github.suzanacavalcante.desafio.openapi.Resposta400Paginacao;
 import io.github.suzanacavalcante.desafio.openapi.Resposta400IdInvalido;
 import io.github.suzanacavalcante.desafio.openapi.Resposta400Validacao;
 import io.github.suzanacavalcante.desafio.openapi.Resposta404ClienteNaoEncontrado;
+import io.github.suzanacavalcante.desafio.openapi.Resposta503BancoIndisponivel;
 import io.github.suzanacavalcante.desafio.contato.dto.ContatoResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -56,6 +57,7 @@ public class ClienteController {
                     + "falhar, nada é gravado. `contatos` é opcional (até 50).")
     @ApiResponse(responseCode = "201", description = "Cliente criado, com os contatos (lista vazia se não vieram)")
     @Resposta400Validacao
+    @Resposta503BancoIndisponivel
     @PostMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<ClienteResponse> criar(@Valid @RequestBody ClienteRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(clienteService.criar(request));
@@ -69,6 +71,7 @@ public class ClienteController {
                     + "`content: []` com 200. A ordem é sempre por id: não há `sort`, e parâmetros desconhecidos são ignorados.")
     @ApiResponse(responseCode = "200", description = "Página de clientes (`content` vazio se não houver nenhum)")
     @Resposta400Paginacao
+    @Resposta503BancoIndisponivel
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public PaginaDeClientes listar(
             @Parameter(description = "Número da página, começando em 0 (máximo " + PAGINA_MAXIMA + ")", example = "0")
@@ -84,6 +87,7 @@ public class ClienteController {
             content = @Content(array = @ArraySchema(schema = @Schema(implementation = ContatoResponse.class))))
     @Resposta400IdInvalido
     @Resposta404ClienteNaoEncontrado
+    @Resposta503BancoIndisponivel
     @GetMapping(value = "/{id}/contatos", produces = MediaType.APPLICATION_JSON_VALUE)
     public List<ContatoResponse> contatosDoCliente(
             @Parameter(description = "Identificador do cliente", example = "1") @PathVariable Long id) {

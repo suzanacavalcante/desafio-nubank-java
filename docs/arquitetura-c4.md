@@ -3,9 +3,7 @@
 API REST de **clientes e contatos** (1 cliente → N contatos), desafio técnico backend.
 Os diagramas usam [Mermaid](https://mermaid.js.org/) (sintaxe C4), então renderizam direto no GitHub (no VS Code, com a extensão Markdown Preview Mermaid Support).
 
-> **Estado documentado:** branch `main` com validação (#10), tratamento global de erros (#11), testes com Testcontainers (#14), Swagger/OpenAPI (#15), migrations com Flyway (#16), Dockerfile + Compose (#17) e integração contínua (#18) e paginação de `GET /clientes` (#29) implementados.
-> Itens **ainda não implementados** aparecem marcados como *(planejado)*:
-> Resiliência a queda do banco (#34).
+> **Estado documentado:** branch `main` com validação (#10), tratamento global de erros (#11), testes com Testcontainers (#14), Swagger/OpenAPI (#15), migrations com Flyway (#16), Dockerfile + Compose (#17), integração contínua (#18), paginação de `GET /clientes` (#29) e resiliência a queda do banco (#34) implementados.
 
 ---
 
@@ -98,7 +96,7 @@ C4Component
         }
 
         Component(dto, "DTOs (records)", "Java records", "ClienteRequest/Response, ContatoRequest, NovoContatoRequest, ContatoResponse")
-        Component(cfg, "config", "pacote", "ApiExceptionHandler: erros do MVC em ProblemDetail (RFC 7807): 400 com mapa campo→mensagem, 404, 500 genérico")
+        Component(cfg, "config", "pacote", "ApiExceptionHandler: erros do MVC em ProblemDetail (RFC 7807): 400 com mapa campo→mensagem, 404, 503 com Retry-After (banco fora do ar), 500 genérico")
         Component(val, "validacao", "pacote", "Restrições de Bean Validation reutilizáveis (@SemCaracteresInvalidos); sem dependências do projeto")
         Component(oas, "Documentação OpenAPI", "springdoc-openapi 3.2.0", "Swagger UI em /swagger-ui.html e documento em /v3/api-docs; os endpoints são descritos por anotações nos controllers e DTOs; o pacote openapi traz título, versão, exemplos, o tipo Problema e as meta-anotações das respostas de erro (@Resposta400..., @Resposta404...)")
     }
@@ -199,12 +197,12 @@ A FK (`fk_contatos_cliente`) tem `ON DELETE CASCADE` e há o índice `idx_contat
 
 | Método | Rota | Corpo | Sucesso | Erros |
 |---|---|---|---|---|
-| POST | `/clientes` | `{ nome, contatos?: [{ telefone, email }] }` | 201 `ClienteResponse` | 400 |
-| POST | `/contatos` | `{ clienteId, telefone, email }` | 201 `ContatoResponse` | 400, 404 |
-| GET | `/clientes` | – | 200 lista de `ClienteResponse` com contatos | – |
-| GET | `/clientes/{id}/contatos` | – | 200 lista de `ContatoResponse` | 400 (`{id}` inválido), 404 |
+| POST | `/clientes` | `{ nome, contatos?: [{ telefone, email }] }` | 201 `ClienteResponse` | 400, 503 |
+| POST | `/contatos` | `{ clienteId, telefone, email }` | 201 `ContatoResponse` | 400, 404, 503 |
+| GET | `/clientes` | `page`, `size` (query) | 200 `PaginaDeClientes` (`content` com `ClienteResponse` e seus contatos, `page`, `size`, `totalElements`, `totalPages`) | 400 (`page`/`size` fora dos limites ou não numéricos), 503 |
+| GET | `/clientes/{id}/contatos` | – | 200 lista de `ContatoResponse` | 400 (`{id}` inválido), 404, 503 |
 
-> Todo erro sai como `ProblemDetail` (`application/problem+json`): validação → 400 com `erros` (campo → mensagem, em português, sem ecoar o valor rejeitado); JSON malformado ou `{id}` de tipo errado → 400; `ClienteNaoEncontradoException` → 404; qualquer outra exceção → 500 genérico (stack trace só no log). `GET /clientes` não tem erros esperados do cliente.
+> Todo erro sai como `ProblemDetail` (`application/problem+json`): validação → 400 com `erros` (campo → mensagem, em português, sem ecoar o valor rejeitado); JSON malformado ou `{id}` de tipo errado → 400; `ClienteNaoEncontradoException` → 404; banco indisponível (`CannotCreateTransactionException`, `DataAccessResourceFailureException` ou falha de conexão na cadeia de causas, ver `FalhaDeConexao`) → 503 com `Retry-After: 5`, sem jdbc/host/porta/SQL (o `connection-timeout` do Hikari é 3 s e o `socketTimeout` do driver, 10 s); qualquer outra exceção → 500 genérico (stack trace só no log). `GET /clientes` responde 400 para `page`/`size` fora dos limites (`size` de 1 a 100, `page` até 10.000.000) ou não numéricos.
 
 ### Fluxo: criar contato (`POST /contatos`)
 
@@ -286,6 +284,4 @@ sequenceDiagram
 
 ## Evolução prevista
 
-| Issue | Mudança | Impacto no C4 |
-|---|---|---|
-| #34 | Resiliência a queda do banco | Timeout curto e resposta 503 com `Retry-After`, tratados em `config` |
+Nenhuma mudança estrutural pendente: as issues planejadas (#29 paginação e #34 resiliência) já estão implementadas. As evoluções sugeridas estão em "O que eu faria a seguir" no README.

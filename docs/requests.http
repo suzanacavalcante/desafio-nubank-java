@@ -104,3 +104,8 @@ GET {{host}}/clientes?size=101
 
 ### 12. Documento OpenAPI (JSON). A interface interativa está em {{host}}/swagger-ui.html
 GET {{host}}/v3/api-docs
+
+### 13. Banco fora do ar  ->  503 com Retry-After: 5
+### Com a API no ar, pare o banco (`docker compose stop db`) e repita qualquer rota que o use, por exemplo:
+GET {{host}}/clientes
+### (a resposta sai em ~3 s; a validação, como `?size=0`, continua respondendo 400 na hora)

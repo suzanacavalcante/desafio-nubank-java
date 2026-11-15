@@ -32,7 +32,8 @@ public class PostgresDeTeste {
         return iniciar();
     }
 
-    private static synchronized PostgreSQLContainer iniciar() {
+    /** O container compartilhado (sobe na primeira chamada); para testes que precisam do endereço real. */
+    public static synchronized PostgreSQLContainer iniciar() {
         if (postgres == null) {
             if (!DockerClientFactory.instance().isDockerAvailable()) {
                 throw new IllegalStateException("""

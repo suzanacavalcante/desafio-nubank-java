@@ -64,6 +64,18 @@ class OpenApiDocumentacaoTest {
     }
 
     @Test
+    void respostaDe503DocumentaORetryAfterEOFormatoDeProblema() {
+        for (String[] e : new String[][]{{"post", "/clientes"}, {"get", "/clientes"}, {"post", "/contatos"},
+                {"get", "/clientes/{id}/contatos"}}) {
+            JsonNode r503 = operacao(e[0], e[1]).path("responses").path("503");
+            assertFalse(r503.isMissingNode(), e[0] + " " + e[1]);
+            assertEquals("integer", r503.path("headers").path("Retry-After").path("schema").path("type").asString(),
+                    e[0] + " " + e[1]);
+            assertFalse(r503.path("content").path("application/problem+json").isMissingNode(), e[0] + " " + e[1]);
+        }
+    }
+
+    @Test
     void informacoesGeraisTemTituloEVersao() {
         assertEquals("API de Clientes e Contatos", doc.path("info").path("title").asString());
         assertEquals("1.0.0", doc.path("info").path("version").asString());
@@ -84,10 +96,10 @@ class OpenApiDocumentacaoTest {
 
     @Test
     void cadaEndpointDocumentaSeusCodigosDeResposta() {
-        assertEquals(List.of("201", "400"), codigos(operacao("post", "/clientes")));
-        assertEquals(List.of("200", "400"), codigos(operacao("get", "/clientes")));
-        assertEquals(List.of("201", "400", "404"), codigos(operacao("post", "/contatos")));
-        assertEquals(List.of("200", "400", "404"), codigos(operacao("get", "/clientes/{id}/contatos")));
+        assertEquals(List.of("201", "400", "503"), codigos(operacao("post", "/clientes")));
+        assertEquals(List.of("200", "400", "503"), codigos(operacao("get", "/clientes")));
+        assertEquals(List.of("201", "400", "404", "503"), codigos(operacao("post", "/contatos")));
+        assertEquals(List.of("200", "400", "404", "503"), codigos(operacao("get", "/clientes/{id}/contatos")));
     }
 
     @Test

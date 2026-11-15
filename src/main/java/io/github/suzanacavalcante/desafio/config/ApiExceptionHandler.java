@@ -3,12 +3,14 @@ package io.github.suzanacavalcante.desafio.config;
 import io.github.suzanacavalcante.desafio.cliente.ClienteNaoEncontradoException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.TypeMismatchException;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -24,6 +26,8 @@ import java.util.Map;
 import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.concurrent.TimeUnit;
+import java.util.function.LongSupplier;
 
 /**
  * Tratamento global de erros: toda resposta de erro da API é um {@link ProblemDetail}
@@ -39,6 +43,8 @@ import java.util.TreeSet;
  *   <li>validação ({@code @Valid}) → 400 com a propriedade {@code erros} (campo → mensagem);</li>
  *   <li>JSON malformado ou de tipo errado, e {@code {id}} de tipo errado → 400;</li>
  *   <li>{@link ClienteNaoEncontradoException} → 404;</li>
+ *   <li>banco indisponível ({@link CannotCreateTransactionException}, {@link DataAccessResourceFailureException})
+ *       → 503 com {@code Retry-After}, sem expor jdbc, host, porta ou SQL;</li>
  *   <li>qualquer outra exceção → 500 genérico, logado, sem expor mensagem, classe ou stack trace.</li>
  * </ul>
  * As respostas de 400 não ecoam o valor rejeitado (só dizem o campo e o motivo).
@@ -54,9 +60,69 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         return handleExceptionInternal(ex, problema, new HttpHeaders(), HttpStatus.NOT_FOUND, request);
     }
 
+    /** Intervalo mínimo entre dois stack traces completos no log durante uma queda (o resto sai em uma linha). */
+    static final long INTERVALO_DO_STACK_TRACE_NANOS = TimeUnit.MINUTES.toNanos(1);
+
+    /** Relógio injetável só para os testes. */
+    private LongSupplier relogioNanos = System::nanoTime;
+    /** Instante do último stack trace completo (vale só se {@code haStackTrace}). */
+    private long ultimoStackTrace;
+    private boolean haStackTrace;
+
+    /** Só para os testes: zera o limite e troca o relógio. */
+    synchronized void reiniciarLimiteDeLog(LongSupplier relogio) {
+        this.relogioNanos = relogio;
+        this.haStackTrace = false;
+    }
+
+    /**
+     * Uma queda de banco gera uma enxurrada de 503 (centenas por segundo), e cada stack trace tem ~13 KB:
+     * registra o stack trace completo (ERROR) na primeira ocorrência e depois no máximo uma vez por minuto; as
+     * demais saem em uma linha (WARN) com a causa raiz.
+     */
+    private synchronized void registrarBancoIndisponivel(Exception ex) {
+        long agora = relogioNanos.getAsLong();
+        if (!haStackTrace || agora - ultimoStackTrace >= INTERVALO_DO_STACK_TRACE_NANOS) {
+            haStackTrace = true;
+            ultimoStackTrace = agora;
+            log.error("Banco de dados indisponível ao processar a requisição "
+                    + "(stack trace completo; os próximos saem resumidos por até 1 min)", ex);
+        } else {
+            Throwable raiz = ex;
+            while (raiz.getCause() != null && raiz.getCause() != raiz) {
+                raiz = raiz.getCause();
+            }
+            log.warn("Banco de dados indisponível ao processar a requisição: {}: {}",
+                    raiz.getClass().getName(), raiz.getMessage());
+        }
+    }
+
+    /** Segundos sugeridos no {@code Retry-After}: o suficiente para o banco voltar de um reinício rápido. */
+    static final long RETRY_AFTER_SEGUNDOS = 5;
+
+    /**
+     * Banco fora do ar ou inalcançável (sem conexão no pool dentro do {@code connection-timeout}): o problema é
+     * temporário e não é culpa do cliente, então 503 com {@code Retry-After} em vez de 500. A mensagem do driver
+     * (que traz URL jdbc, host e porta) fica só no log, com o stack trace.
+     */
+    @ExceptionHandler({CannotCreateTransactionException.class, DataAccessResourceFailureException.class})
+    ResponseEntity<Object> bancoIndisponivel(Exception ex, WebRequest request) {
+        registrarBancoIndisponivel(ex);
+        ProblemDetail problema = ProblemDetail.forStatusAndDetail(
+                HttpStatus.SERVICE_UNAVAILABLE, "Serviço temporariamente indisponível. Tente novamente em instantes.");
+        problema.setTitle("Serviço indisponível");
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(HttpHeaders.RETRY_AFTER, String.valueOf(RETRY_AFTER_SEGUNDOS));
+        return handleExceptionInternal(ex, problema, headers, HttpStatus.SERVICE_UNAVAILABLE, request);
+    }
+
     /** Rede de segurança: erro inesperado vira 500 genérico; o detalhe fica só no log. */
     @ExceptionHandler(Exception.class)
     ResponseEntity<Object> erroInesperado(Exception ex, WebRequest request) {
+        if (FalhaDeConexao.causadaPor(ex)) {
+            // ex.: conexão já morta no pool na 1ª requisição depois da queda (a consulta e o rollback falham)
+            return bancoIndisponivel(ex, request);
+        }
         log.error("Erro inesperado ao processar a requisição", ex);
         ProblemDetail problema = ProblemDetail.forStatusAndDetail(
                 HttpStatus.INTERNAL_SERVER_ERROR, "Erro interno. Tente novamente mais tarde.");

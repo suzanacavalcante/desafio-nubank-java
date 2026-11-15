@@ -29,6 +29,14 @@ public final class ExemplosDeErro {
               "instance": "/contatos"
             }""";
 
+    public static final String SERVICO_INDISPONIVEL_503 = """
+            {
+              "title": "Serviço indisponível",
+              "status": 503,
+              "detail": "Serviço temporariamente indisponível. Tente novamente em instantes.",
+              "instance": "/clientes"
+            }""";
+
     public static final String PAGINACAO_400 = """
             {
               "title": "Dados inválidos",

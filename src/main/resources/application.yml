@@ -9,6 +9,23 @@ spring:
     # Sem valores padrão: credenciais vêm do .env ou do ambiente
     username: ${DB_USER}
     password: ${DB_PASSWORD}
+    hikari:
+      # Quanto uma requisição espera por uma conexão antes de desistir (padrão do Hikari: 30 s). Com o banco fora
+      # do ar, 30 s por requisição esgota as threads do Tomcat; 3 s falha rápido e vira 503 com Retry-After.
+      # Folga de sobra para um banco saudável (obter conexão do pool leva milissegundos).
+      # Mínimo 250 (o Hikari recusa menos e a aplicação não sobe); 0 desliga o limite, não use.
+      connection-timeout: ${DB_CONNECTION_TIMEOUT_MS:3000}
+      # Quanto o Hikari espera o teste de uma conexão ociosa antes de emprestá-la (padrão: 5 s, e NÃO é limitado
+      # pelo connection-timeout). Com o banco travado, cada teste esperaria 5 s; num banco saudável leva milissegundos.
+      validation-timeout: 1000
+      data-source-properties:
+        # Limite de espera por resposta numa conexão JÁ aberta (segundos; o padrão do driver é sem limite). Cobre o
+        # banco que trava sem recusar (host que cai sem RST, firewall que descarta pacotes, tabela travada por lock):
+        # sem isto a requisição ficaria pendurada por minutos. Estourado, o driver lança erro de I/O (SQLState 08006)
+        # e a API responde 503. Bem acima da consulta mais lenta esperada (as daqui levam milissegundos).
+        socketTimeout: ${DB_SOCKET_TIMEOUT_S:10}
+        # Faz o sistema detectar conexão morta de vez (par que sumiu), em vez de esperar para sempre.
+        tcpKeepAlive: true
   web:
     # Idioma fixo: as mensagens de validação (Hibernate Validator) saem sempre em português,
     # independentemente do idioma da máquina ou do cabeçalho Accept-Language.
